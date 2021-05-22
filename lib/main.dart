@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:tree_builder/classes/dataframe.dart';
 
 void main() {
   runApp(MyApp());
@@ -25,6 +27,17 @@ class EditorPage extends StatefulWidget {
 }
 
 class _EditorPageState extends State<EditorPage> {
+  DataFrame dataFrame = DataFrame();
+
+  List<TextEditingController> addRowFormControllers = [];
+
+  TextEditingController columnNameController = TextEditingController();
+  FocusNode columnNameEditorFocusNode = FocusNode();
+
+  ScrollController inputTableVerticalScrollConstroller = ScrollController();
+  ScrollController inputTableHorizontalScrollConstroller = ScrollController();
+
+  bool showDataInput = false;
   bool showStats = false;
   bool showSettings = false;
   bool showDetails = false;
@@ -39,7 +52,31 @@ class _EditorPageState extends State<EditorPage> {
   Offset pos = Offset.zero;
 
   @override
+  void dispose() {
+    columnNameEditorFocusNode.dispose();
+    addRowFormControllers.forEach((element) {
+      element.dispose();
+    });
+    columnNameController.dispose();
+    inputTableHorizontalScrollConstroller.dispose();
+    inputTableVerticalScrollConstroller.dispose();
+    super.dispose();
+  }
+
+  void onColumnNameSubmit() {
+    if (columnNameController.text.isNotEmpty) {
+      setState(() {
+        dataFrame.addColumn(columnNameController.text);
+        columnNameController.clear();
+        addRowFormControllers.add(TextEditingController());
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    Size size = MediaQuery.of(context).size;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -69,28 +106,23 @@ class _EditorPageState extends State<EditorPage> {
                   });
                 }
               },
-              // onPanUpdate: (details) {
-              //   setState(() {
-              //     pos += details.delta;
-              //   });
-              // },
-              // child: CustomPaint(),
             ),
           ),
           AnimatedPositioned(
             duration: Duration(milliseconds: 250),
             curve: Curves.ease,
-            top: 0,
-            bottom: 0,
-            left: showDetails ? 0 : -350,
+            bottom: showDataInput ? 0 : -size.height - 70,
+            left: 0,
+            right: 0,
             child: Container(
-              width: 350,
+              height: size.height - 70,
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
                     blurRadius: 2,
-                    color: Colors.black.withAlpha(50),
+                    color: Colors.black.withAlpha(100),
+                    offset: Offset(0, 1),
                   ),
                 ],
               ),
@@ -98,12 +130,385 @@ class _EditorPageState extends State<EditorPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                    padding: const EdgeInsets.all(20.0),
                     child: Text(
-                      'Szczegóły węzła',
+                      'Wprowadź dane',
                       style: TextStyle(fontSize: 20),
                     ),
-                  )
+                  ),
+                  Container(
+                    height: 1,
+                    color: Colors.grey[300],
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Card(
+                      elevation: 4,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (dataFrame.getHeaders().isNotEmpty) ...{
+                                Flexible(
+                                  flex: 1,
+                                  child: Padding(
+                                    padding:
+                                        const EdgeInsets.only(top: 8, left: 8),
+                                    child: Container(
+                                      clipBehavior: Clip.antiAlias,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                            color: Colors.grey[200]!),
+                                        borderRadius: BorderRadius.all(
+                                          Radius.circular(4),
+                                        ),
+                                      ),
+                                      child: Scrollbar(
+                                        controller:
+                                            inputTableVerticalScrollConstroller,
+                                        isAlwaysShown: true,
+                                        thickness: 10,
+                                        child: SingleChildScrollView(
+                                          controller:
+                                              inputTableVerticalScrollConstroller,
+                                          scrollDirection: Axis.vertical,
+                                          child: Scrollbar(
+                                            controller:
+                                                inputTableHorizontalScrollConstroller,
+                                            isAlwaysShown: true,
+                                            thickness: 10,
+                                            child: SingleChildScrollView(
+                                              controller:
+                                                  inputTableHorizontalScrollConstroller,
+                                              scrollDirection: Axis.horizontal,
+                                              child: DataTable(
+                                                columnSpacing: 12,
+                                                headingRowHeight: 48,
+                                                columns: [
+                                                  ...dataFrame
+                                                      .getHeaders()
+                                                      .asMap()
+                                                      .entries
+                                                      .map(
+                                                        (entry) => DataColumn(
+                                                          label: Padding(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                        .only(
+                                                                    left: 8),
+                                                            child: Row(
+                                                              children: [
+                                                                Text(
+                                                                  entry.value,
+                                                                  style: TextStyle(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w700),
+                                                                ),
+                                                                IconButton(
+                                                                  onPressed:
+                                                                      () {
+                                                                    showDialog(
+                                                                      context:
+                                                                          context,
+                                                                      builder:
+                                                                          (context) {
+                                                                        return AlertDialog(
+                                                                          title:
+                                                                              Text('Usuń kolumnę'),
+                                                                          content:
+                                                                              RichText(
+                                                                            text:
+                                                                                TextSpan(
+                                                                              children: [
+                                                                                TextSpan(text: 'Czy na pewno usunąć kolumnę '),
+                                                                                TextSpan(
+                                                                                  text: '${entry.value}',
+                                                                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                                                                ),
+                                                                                TextSpan(text: '?'),
+                                                                              ],
+                                                                            ),
+                                                                          ),
+                                                                          actions: [
+                                                                            TextButton(
+                                                                              onPressed: () => Navigator.of(context).pop(),
+                                                                              child: Padding(
+                                                                                padding: const EdgeInsets.all(8.0),
+                                                                                child: Text('Anuluj'),
+                                                                              ),
+                                                                            ),
+                                                                            ElevatedButton(
+                                                                              style: ElevatedButton.styleFrom(
+                                                                                primary: Colors.red,
+                                                                              ),
+                                                                              onPressed: () {
+                                                                                Navigator.of(context).pop();
+                                                                                setState(() {
+                                                                                  dataFrame.removeColumn(entry.key);
+                                                                                  addRowFormControllers.removeAt(entry.key);
+                                                                                });
+                                                                              },
+                                                                              child: Padding(
+                                                                                padding: const EdgeInsets.all(8.0),
+                                                                                child: Text('Usuń'),
+                                                                              ),
+                                                                            ),
+                                                                          ],
+                                                                        );
+                                                                      },
+                                                                    );
+                                                                  },
+                                                                  color: Colors
+                                                                      .grey,
+                                                                  icon: Icon(Icons
+                                                                      .remove),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                ],
+                                                rows: [
+                                                  ...dataFrame.getRows().map(
+                                                        (e) => DataRow(
+                                                          cells: [
+                                                            ...e.map(
+                                                              (h) => DataCell(
+                                                                Text(
+                                                                  h ?? 'null',
+                                                                  style: TextStyle(
+                                                                      color: h ==
+                                                                              null
+                                                                          ? Colors.grey[
+                                                                              400]
+                                                                          : Colors
+                                                                              .black),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              },
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: IconButtonWithTooltip(
+                                  icon: Icons.add_box_rounded,
+                                  tooltipText: 'Dodaj kolumnę',
+                                  iconColor: Colors.white,
+                                  backgroundColor: Colors.blue,
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) {
+                                        return AlertDialog(
+                                          actions: [
+                                            ElevatedButton(
+                                              onPressed: () {
+                                                onColumnNameSubmit();
+                                              },
+                                              child: Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 12),
+                                                child: Text('Dodaj'),
+                                              ),
+                                            )
+                                          ],
+                                          content: TextField(
+                                            controller: columnNameController,
+                                            focusNode:
+                                                columnNameEditorFocusNode,
+                                            onSubmitted: (value) {
+                                              onColumnNameSubmit();
+                                              columnNameEditorFocusNode
+                                                  .requestFocus();
+                                              SchedulerBinding.instance
+                                                  ?.addPostFrameCallback(
+                                                      (timeStamp) {
+                                                setState(() {
+                                                  inputTableHorizontalScrollConstroller
+                                                      .animateTo(
+                                                    inputTableHorizontalScrollConstroller
+                                                        .position
+                                                        .maxScrollExtent,
+                                                    duration: Duration(
+                                                        milliseconds: 250),
+                                                    curve: Curves.ease,
+                                                  );
+                                                });
+                                              });
+                                            },
+                                            decoration: InputDecoration(
+                                                hintText: 'Nazwa kolumny'),
+                                          ),
+                                          title: Text('Dodaj kolumnę'),
+                                        );
+                                      },
+                                    );
+
+                                    columnNameEditorFocusNode.unfocus();
+                                    columnNameEditorFocusNode.requestFocus();
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (dataFrame.getHeaders().isNotEmpty) ...{
+                            Row(
+                              children: [
+                                Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: IconButtonWithTooltip(
+                                    icon: Icons.playlist_add,
+                                    tooltipText: 'Dodaj wiersz',
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.blue,
+                                    onPressed: () {
+                                      showDialog(
+                                        context: context,
+                                        builder: (context) {
+                                          return AlertDialog(
+                                            title: Text('Dodaj wiersz'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.of(context).pop();
+                                                },
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.all(8.0),
+                                                  child: Text('Anuluj'),
+                                                ),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () {
+                                                  int headersCount = dataFrame
+                                                      .getHeaders()
+                                                      .length;
+                                                  List<String?> newRow = [];
+                                                  for (int i = 0;
+                                                      i < headersCount;
+                                                      i++) {
+                                                    String fieldText =
+                                                        addRowFormControllers[i]
+                                                            .text;
+                                                    if (fieldText.isEmpty) {
+                                                      newRow.add(null);
+                                                    } else {
+                                                      newRow.add(fieldText);
+                                                    }
+                                                  }
+                                                  setState(() {
+                                                    dataFrame.addRow(newRow);
+                                                    addRowFormControllers
+                                                        .forEach((element) {
+                                                      element.clear();
+                                                    });
+                                                  });
+                                                  Navigator.of(context).pop();
+                                                },
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.all(8.0),
+                                                  child: Text('Dodaj'),
+                                                ),
+                                              ),
+                                            ],
+                                            content: SingleChildScrollView(
+                                              scrollDirection: Axis.vertical,
+                                              child: Column(
+                                                children: [
+                                                  ...dataFrame
+                                                      .getHeaders()
+                                                      .asMap()
+                                                      .entries
+                                                      .map(
+                                                        (e) => TextField(
+                                                          controller:
+                                                              addRowFormControllers[
+                                                                  e.key],
+                                                          decoration:
+                                                              InputDecoration(
+                                                                  hintText:
+                                                                      '${e.value}'),
+                                                        ),
+                                                      ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                      top: 8, right: 8, bottom: 8),
+                                  child: IconButtonWithTooltip(
+                                    icon: Icons.delete,
+                                    tooltipText: 'Usuń zaznaczone',
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.red,
+                                    onPressed: () {
+                                      showDialog(
+                                        context: context,
+                                        builder: (context) {
+                                          return AlertDialog(
+                                            title: Text('Czy na pewno?'),
+                                            content: Text(
+                                                'Spowoduje to usunięcie zaznaczonych wierszy'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.of(context).pop();
+                                                },
+                                                child: Padding(
+                                                  padding: EdgeInsets.all(8),
+                                                  child: Text('Anuluj'),
+                                                ),
+                                              ),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                    primary: Colors.red),
+                                                onPressed: () {
+                                                  Navigator.of(context).pop();
+                                                  //todo: usunięcie zaznaczonych wierszy
+                                                },
+                                                child: Padding(
+                                                  padding: EdgeInsets.all(8),
+                                                  child: Text('Ok'),
+                                                ),
+                                              )
+                                            ],
+                                          );
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          }
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -111,7 +516,7 @@ class _EditorPageState extends State<EditorPage> {
           AnimatedPositioned(
             duration: Duration(milliseconds: 250),
             curve: Curves.ease,
-            top: 0,
+            top: 70,
             bottom: 0,
             right: showStats ? 0 : -350,
             child: Container(
@@ -236,12 +641,13 @@ class _EditorPageState extends State<EditorPage> {
                   children: [
                     IconButtonWithTooltip(
                       icon: Icons.assignment,
-                      tooltipText: 'Szczegóły o węźle',
-                      iconColor: showDetails ? Colors.white : Colors.black,
-                      backgroundColor: showDetails ? Colors.blue : Colors.white,
+                      tooltipText: 'Dane wejściowe',
+                      iconColor: showDataInput ? Colors.white : Colors.black,
+                      backgroundColor:
+                          showDataInput ? Colors.blue : Colors.white,
                       onPressed: () {
                         setState(() {
-                          showDetails = !showDetails;
+                          showDataInput = !showDataInput;
                         });
                       },
                     ),
@@ -341,6 +747,20 @@ class _EditorPageState extends State<EditorPage> {
         ],
       ),
     );
+  }
+}
+
+class RegisteredTextField extends StatefulWidget {
+  @override
+  RegisteredTextFieldState createState() => RegisteredTextFieldState();
+}
+
+class RegisteredTextFieldState extends State<RegisteredTextField> {
+  TextEditingController controller = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container();
   }
 }
 
