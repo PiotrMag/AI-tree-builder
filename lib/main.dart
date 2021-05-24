@@ -1,7 +1,13 @@
+import 'dart:async';
+import 'dart:collection';
+import 'dart:html';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:tree_builder/classes/dataframe.dart';
+import 'package:tree_builder/classes/tree_node.dart';
 
 void main() {
   runApp(MyApp());
@@ -27,6 +33,8 @@ class EditorPage extends StatefulWidget {
 }
 
 class _EditorPageState extends State<EditorPage> {
+  GlobalKey<ScaffoldState> scaffoldKey = GlobalKey();
+
   DataFrame dataFrame = DataFrame();
   List<bool> inputTableCheckedItems = [];
 
@@ -52,6 +60,17 @@ class _EditorPageState extends State<EditorPage> {
 
   Offset pos = Offset.zero;
 
+  Timer? simulationTimer;
+
+  Queue<TreeNode> treeNodeQueue = Queue();
+  TreeNode? root;
+
+  bool isSnackbarShowing = false;
+
+  //todo: usunąć zmienne pomocnicze
+  double width = 100, height = 100;
+  Color color = Colors.red;
+
   @override
   void dispose() {
     columnNameEditorFocusNode.dispose();
@@ -61,7 +80,98 @@ class _EditorPageState extends State<EditorPage> {
     columnNameController.dispose();
     inputTableHorizontalScrollConstroller.dispose();
     inputTableVerticalScrollConstroller.dispose();
+    simulationTimer?.cancel();
     super.dispose();
+  }
+
+  bool checkIfBuildDone() {
+    if (treeNodeQueue.isEmpty) {
+      if (!isSnackbarShowing) {
+        isSnackbarShowing = true;
+        ScaffoldMessenger.maybeOf(scaffoldKey.currentContext!)
+            ?.showSnackBar(
+              SnackBar(
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+                // padding: EdgeInsets.all(8),
+                elevation: 4,
+                content: Row(
+                  children: [
+                    Icon(
+                      Icons.task_alt,
+                      color: Colors.white,
+                    ),
+                    SizedBox(width: 16),
+                    Text(
+                      'Budowa zakończona',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+            )
+            .closed
+            .then((value) => isSnackbarShowing = false);
+      }
+      setState(() {
+        run = false;
+      });
+      return true;
+    }
+    return false;
+  }
+
+  void handleTimer() {
+    // wykonywanie właściwego kodu funkcji timerRunner()
+
+    // jeżeli kolejka węzłów do sprawdzenia jest pusta, to symulacja się kończy
+    if (checkIfBuildDone()) return;
+    makeStep();
+    if (checkIfBuildDone()) return;
+
+    // ustawienie powtórzenia timer'a
+    simulationTimer?.cancel();
+    simulationTimer =
+        Timer(Duration(milliseconds: (1000 * sliderValue).toInt()), () {
+      handleTimer();
+    });
+  }
+
+  void makeStep() {
+    TreeNode currentNode = treeNodeQueue.removeFirst();
+
+    //todo: sprawdzenie, który atrybut najlepiej dzieli próbki
+
+    //todo: podzielenie węzła względem najlepszego atrybutu
+
+    //todo: dodanie do kolejki tylko tych węzłów, które nie są liścmi
+
+    setState(() {
+      width = Random().nextInt(150) + 50;
+      height = Random().nextInt(150) + 50;
+      color = Color.fromARGB(255, Random().nextInt(255), Random().nextInt(255),
+          Random().nextInt(255));
+    });
+  }
+
+  void onSimulationButtonTap(bool newValue) {
+    if (simulationTimer?.isActive ?? false) {
+      simulationTimer?.cancel();
+    }
+    if (newValue == true) {
+      // jeżeli nie ma jeszcze skonstruowanego drzewa, to
+      // należy utworzyć korzeń
+      if (root == null) {
+        treeNodeQueue.clear(); // wyczyszczenie kolejki dla pewności
+        root = TreeNode();
+        root!.availableSplitArgs =
+            List<int>.generate(dataFrame.getHeaders().length, (index) => index);
+        root!.samplesIds =
+            List<int>.generate(dataFrame.getHeaders().length, (index) => index);
+        treeNodeQueue.addLast(root!);
+      }
+      handleTimer();
+    }
   }
 
   void onColumnNameSubmit() {
@@ -79,6 +189,7 @@ class _EditorPageState extends State<EditorPage> {
     Size size = MediaQuery.of(context).size;
 
     return Scaffold(
+      key: scaffoldKey,
       body: Stack(
         children: [
           Positioned(
@@ -87,6 +198,14 @@ class _EditorPageState extends State<EditorPage> {
             left: 0,
             right: 0,
             child: CustomPaint(),
+          ),
+          Center(
+            child: AnimatedContainer(
+              width: width,
+              height: height,
+              color: color,
+              duration: Duration(milliseconds: 150),
+            ),
           ),
           MouseRegion(
             cursor: selectedToolNumber == 2
@@ -773,6 +892,7 @@ class _EditorPageState extends State<EditorPage> {
                       onPressed: () {
                         setState(() {
                           run = !run;
+                          onSimulationButtonTap(run);
                         });
                       },
                     ),
