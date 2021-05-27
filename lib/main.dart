@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:tree_builder/classes/dataframe.dart';
 import 'package:tree_builder/classes/tree_node.dart';
 
+import 'classes/simple_value.dart';
 import 'classes/tree_painter.dart';
 
 void main() {
@@ -36,6 +37,7 @@ class EditorPage extends StatefulWidget {
 
 class _EditorPageState extends State<EditorPage> {
   GlobalKey<ScaffoldState> scaffoldKey = GlobalKey();
+  GlobalKey<_TreeViewState> treeViewKey = GlobalKey();
 
   DataFrame dataFrame = DataFrame();
   List<bool> inputTableCheckedItems = [];
@@ -60,7 +62,7 @@ class _EditorPageState extends State<EditorPage> {
 
   double sliderValue = 1.0;
 
-  Offset pos = Offset.zero;
+  SimpleValue<Offset> pos = SimpleValue(value: Offset.zero);
 
   Timer? simulationTimer;
 
@@ -69,7 +71,7 @@ class _EditorPageState extends State<EditorPage> {
 
   List<TreeNode> treeNodes = [];
 
-  TreeNode? selectedTreeNode;
+  SimpleValue<TreeNode> selectedTreeNode = SimpleValue();
   bool isMovingNode = false;
 
   bool isSnackbarShowing = false;
@@ -294,11 +296,17 @@ class _EditorPageState extends State<EditorPage> {
             : outputAttrIndex));
         root!.samplesIds =
             List<int>.generate(dataFrame.getRows().length, (index) => index);
-        root!.pos = Offset(400, 400);
+        root!.pos = Offset(MediaQuery.of(context).size.width / 2,
+            MediaQuery.of(context).size.height / 2);
         treeNodeQueue.addLast(root!);
         treeNodes.add(root!);
+        simulationTimer =
+            Timer(Duration(milliseconds: (1000 * sliderValue).toInt()), () {
+          handleTimer();
+        });
+      } else {
+        handleTimer();
       }
-      handleTimer();
     }
   }
 
@@ -346,12 +354,11 @@ class _EditorPageState extends State<EditorPage> {
             bottom: 0,
             left: 0,
             right: 0,
-            child: CustomPaint(
-              foregroundPainter: TreePainter(
-                  tree: treeNodes,
-                  pos: pos,
-                  selectedNodeId: selectedTreeNode?.id ?? -1),
-            ),
+            child: TreeView(
+                key: treeViewKey,
+                treeNodes: treeNodes,
+                pos: pos,
+                selectedTreeNode: selectedTreeNode),
           ),
           // Center(
           //   child: AnimatedContainer(
@@ -367,9 +374,8 @@ class _EditorPageState extends State<EditorPage> {
                 : SystemMouseCursors.basic,
             child: GestureDetector(
               onPanStart: (details) {
-                if (selectedTreeNode
-                        ?.getBoundingRect()
-                        .contains(details.localPosition - pos) ??
+                if (selectedTreeNode.value?.getBoundingRect().contains(
+                        details.localPosition - (pos.value ?? Offset.zero)) ??
                     false) {
                   isMovingNode = true;
                 } else {
@@ -378,33 +384,37 @@ class _EditorPageState extends State<EditorPage> {
               },
               onPanUpdate: (details) {
                 if (selectedToolNumber == 1) {
-                  if (selectedTreeNode != null && isMovingNode) {
-                    setState(() {
-                      selectedTreeNode?.pos += details.delta;
+                  if (selectedTreeNode.value != null && isMovingNode) {
+                    treeViewKey.currentState?.setState(() {
+                      selectedTreeNode.value?.pos += details.delta;
                     });
                   }
                 } else if (selectedToolNumber == 2) {
-                  setState(() {
-                    pos += details.delta;
+                  treeViewKey.currentState?.setState(() {
+                    if (pos.value != null) {
+                      pos.value = details.delta + pos.value!;
+                    }
                   });
                 }
               },
               onDoubleTap: () {
                 if (selectedToolNumber == 2) {
-                  setState(() {
-                    pos = Offset.zero;
+                  treeViewKey.currentState?.setState(() {
+                    pos.value = Offset.zero;
                   });
                 }
               },
               onTapDown: (details) {
                 if (selectedToolNumber == 1) {
-                  setState(() {
+                  treeViewKey.currentState?.setState(() {
                     print('Tap');
                     Offset tapPos = details.localPosition;
                     // sprawdzenie, czy któryś z węzłów został kliknięty
                     TreeNode? clickedNode;
                     for (TreeNode node in treeNodes.reversed) {
-                      if (node.getBoundingRect().contains(tapPos - pos)) {
+                      if (node
+                          .getBoundingRect()
+                          .contains(tapPos - (pos.value ?? Offset.zero))) {
                         clickedNode = node;
                         print(clickedNode);
                         break;
@@ -416,7 +426,7 @@ class _EditorPageState extends State<EditorPage> {
                       treeNodes.add(clickedNode);
                     }
 
-                    selectedTreeNode = clickedNode;
+                    selectedTreeNode.value = clickedNode;
                   });
                 }
               },
@@ -1116,7 +1126,7 @@ class _EditorPageState extends State<EditorPage> {
                           treeNodes.clear();
                           root = null;
                           resetWaiting = false;
-                          selectedTreeNode = null;
+                          selectedTreeNode.value = null;
                         });
                       },
                     ),
@@ -1152,6 +1162,34 @@ class _EditorPageState extends State<EditorPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class TreeView extends StatefulWidget {
+  const TreeView({
+    Key? key,
+    required this.treeNodes,
+    required this.pos,
+    required this.selectedTreeNode,
+  }) : super(key: key);
+
+  final List<TreeNode> treeNodes;
+  final SimpleValue<Offset> pos;
+  final SimpleValue<TreeNode>? selectedTreeNode;
+
+  @override
+  _TreeViewState createState() => _TreeViewState();
+}
+
+class _TreeViewState extends State<TreeView> {
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      foregroundPainter: TreePainter(
+          tree: widget.treeNodes,
+          pos: widget.pos.value ?? Offset.zero,
+          selectedNodeId: widget.selectedTreeNode?.value?.id ?? -1),
     );
   }
 }

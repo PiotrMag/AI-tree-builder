@@ -57,6 +57,10 @@ class TreePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return ListEquality().equals(this.tree, (oldDelegate as TreePainter).tree);
+    oldDelegate = oldDelegate as TreePainter;
+    // return !ListEquality().equals(this.tree, oldDelegate.tree) ||
+    //     pos.dx != oldDelegate.pos.dx ||
+    //     pos.dy != oldDelegate.pos.dy;
+    return true;
   }
 }
