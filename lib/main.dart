@@ -9,6 +9,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:tree_builder/classes/dataframe.dart';
 import 'package:tree_builder/classes/tree_node.dart';
 
+import 'classes/tree_painter.dart';
+
 void main() {
   runApp(MyApp());
 }
@@ -67,6 +69,8 @@ class _EditorPageState extends State<EditorPage> {
 
   bool isSnackbarShowing = false;
 
+  int outputAttrIndex = -1;
+
   //todo: usunąć zmienne pomocnicze
   double width = 100, height = 100;
   Color color = Colors.red;
@@ -85,6 +89,7 @@ class _EditorPageState extends State<EditorPage> {
   }
 
   bool checkIfBuildDone() {
+    print(treeNodeQueue.isEmpty);
     if (treeNodeQueue.isEmpty) {
       if (!isSnackbarShowing) {
         isSnackbarShowing = true;
@@ -137,16 +142,123 @@ class _EditorPageState extends State<EditorPage> {
     });
   }
 
+  double gini(List<List<String?>> samples, int attrIndex) {
+    List<String?> attrValues = samples.map((e) => e[attrIndex]).toList();
+    List<String?> uniqueClasses = attrValues.toSet().toList();
+
+    double output = 1;
+
+    for (String? c in uniqueClasses) {
+      int classSamplesCount = attrValues.where((e) => e == c).length;
+      output -= pow(classSamplesCount.toDouble() / attrValues.length, 2);
+    }
+
+    return output;
+  }
+
+  double giniSplit(
+      List<List<String?>> samples, int attrIndex, int outputIndex) {
+    List<String?> attrValues = samples.map((e) => e[attrIndex]).toList();
+    List<String?> uniqueClasses = attrValues.toSet().toList();
+
+    double giniSplitValue = 0;
+
+    for (String? c in uniqueClasses) {
+      List<List<String?>> classSamples =
+          samples.where((e) => e[attrIndex] == c).toList();
+      giniSplitValue += classSamples.length /
+          samples.length *
+          gini(classSamples, outputIndex);
+    }
+
+    return giniSplitValue;
+  }
+
   void makeStep() {
     TreeNode currentNode = treeNodeQueue.removeFirst();
 
-    //todo: sprawdzenie, który atrybut najlepiej dzieli próbki
+    int bestAttrIndex = -1;
+    double bestSplitValue = double.infinity;
 
-    //todo: podzielenie węzła względem najlepszego atrybutu
+    List<MapEntry<int, List<String?>>> samples = dataFrame
+        .getRows()
+        .asMap()
+        .entries
+        .where((e) => currentNode.samplesIds.contains(e.key))
+        .toList();
 
-    //todo: dodanie do kolejki tylko tych węzłów, które nie są liścmi
+    // odnalezienie tego atrybutu, który najlepiej dzieli próbki
+    for (int attr in currentNode.availableSplitArgs) {
+      // obliczenie GINI
+      double giniSplitValue = giniSplit(
+          samples.map((e) => e.value).toList(),
+          attr,
+          (outputAttrIndex < 0
+              ? dataFrame.getHeaders().length - 1
+              : outputAttrIndex));
+
+      // jeżeli obecny atrybut lepiej dzieli próbki to należy go zapamiętać
+      if (giniSplitValue < bestSplitValue) {
+        bestAttrIndex = attr;
+        bestSplitValue = giniSplitValue;
+      }
+    }
+
+    currentNode.splitArgId = bestAttrIndex;
+    if (bestAttrIndex >= 0) {
+      List<String?> attrValues =
+          samples.map((e) => e.value[bestAttrIndex]).toList();
+      List<String?> uniqueClasses = attrValues.toSet().toList();
+
+      // zmienna pomocnicza, potrzebna do ustalania położenia nowych
+      // węzłów na ekranie
+      int counter = 0;
+
+      for (String? c in uniqueClasses) {
+        // utworzenie nowego węzła i uzupełnienie danych o nim
+        TreeNode newNode = TreeNode();
+        newNode.availableSplitArgs =
+            List<int>.from(currentNode.availableSplitArgs);
+        newNode.availableSplitArgs.remove(bestAttrIndex);
+        newNode.parent = currentNode;
+        newNode.pos = Offset(
+            -100 +
+                200 / (uniqueClasses.length - 1) * counter +
+                currentNode.pos.dx,
+            currentNode.pos.dy + 100);
+        newNode.value = c ?? 'null';
+        newNode.samplesIds = samples
+            .where((e) => e.value[bestAttrIndex] == c)
+            .map((e) => e.key)
+            .toList();
+
+        // utworzenie listy próbek, które należą do klasy [c]
+        List<List<String?>> classSamples = samples
+            .where((e) => e.value[bestAttrIndex] == c)
+            .map((e) => e.value)
+            .toList();
+
+        // jeżeli gini index dla danej klasy != 0, to znaczy, że nie powstał liść
+        // i należy ten nowy węzeł dodać do kolejki do podziału
+        if (gini(
+                classSamples,
+                (outputAttrIndex < 0
+                    ? dataFrame.getHeaders().length - 1
+                    : outputAttrIndex)) !=
+            0) {
+          treeNodeQueue.addLast(newNode);
+        }
+
+        // dodanie nowego węzła jako dziecka obecnego węzła [currentNode]
+        currentNode.children.add(newNode);
+
+        //
+        counter += 1;
+      }
+    }
 
     setState(() {
+      //todo: rysowanie węzłów
       width = Random().nextInt(150) + 50;
       height = Random().nextInt(150) + 50;
       color = Color.fromARGB(255, Random().nextInt(255), Random().nextInt(255),
@@ -166,8 +278,12 @@ class _EditorPageState extends State<EditorPage> {
         root = TreeNode();
         root!.availableSplitArgs =
             List<int>.generate(dataFrame.getHeaders().length, (index) => index);
+        root!.availableSplitArgs.remove((outputAttrIndex < 0
+            ? dataFrame.getHeaders().length - 1
+            : outputAttrIndex));
         root!.samplesIds =
-            List<int>.generate(dataFrame.getHeaders().length, (index) => index);
+            List<int>.generate(dataFrame.getRows().length, (index) => index);
+        root!.pos = Offset(400, 400);
         treeNodeQueue.addLast(root!);
       }
       handleTimer();
@@ -184,6 +300,27 @@ class _EditorPageState extends State<EditorPage> {
     }
   }
 
+  List<TreeNode> nodeToTree(TreeNode? node) {
+    if (root == null) {
+      return [];
+    }
+
+    List<TreeNode> tree = [];
+    Queue<TreeNode> queue = Queue();
+
+    queue.add(node!);
+
+    while (queue.isNotEmpty) {
+      TreeNode currentNode = queue.removeFirst();
+      tree.add(currentNode);
+      for (TreeNode c in currentNode.children) {
+        queue.addLast(c);
+      }
+    }
+
+    return tree;
+  }
+
   @override
   Widget build(BuildContext context) {
     Size size = MediaQuery.of(context).size;
@@ -197,16 +334,18 @@ class _EditorPageState extends State<EditorPage> {
             bottom: 0,
             left: 0,
             right: 0,
-            child: CustomPaint(),
-          ),
-          Center(
-            child: AnimatedContainer(
-              width: width,
-              height: height,
-              color: color,
-              duration: Duration(milliseconds: 150),
+            child: CustomPaint(
+              foregroundPainter: TreePainter(tree: nodeToTree(root), pos: pos),
             ),
           ),
+          // Center(
+          //   child: AnimatedContainer(
+          //     width: width,
+          //     height: height,
+          //     color: color,
+          //     duration: Duration(milliseconds: 150),
+          //   ),
+          // ),
           MouseRegion(
             cursor: selectedToolNumber == 2
                 ? SystemMouseCursors.move
@@ -914,7 +1053,11 @@ class _EditorPageState extends State<EditorPage> {
                     IconButtonWithTooltip(
                       icon: Icons.replay_rounded,
                       tooltipText: 'Wyczyść budowę drzewa',
-                      onPressed: () {},
+                      onPressed: () {
+                        setState(() {
+                          root = null;
+                        });
+                      },
                     ),
                     // ConstrainedBox(
                     //   constraints: BoxConstraints(maxWidth: 250, maxHeight: 40),
