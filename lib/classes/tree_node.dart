@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 
 class TreeNode {
+  static int _idCounter = 0;
+
+  late int _id;
+  get id {
+    return _id;
+  }
+
   TreeNode? parent;
 
   // lista przechowująca identyfikatory argumentów dostępnych do
@@ -30,4 +37,14 @@ class TreeNode {
 
   // położenie węzła na stronie (potrzebne do rysowania węzła)
   Offset pos = Offset.zero;
+
+  Rect getBoundingRect() {
+    return Rect.fromLTWH(
+        pos.dx, pos.dy, 50, 50); //todo: zminić wyliczanie rozmiaru
+  }
+
+  TreeNode() {
+    _id = _idCounter;
+    _idCounter += 1;
+  }
 }

@@ -7,8 +7,10 @@ import 'tree_node.dart';
 class TreePainter extends CustomPainter {
   final List<TreeNode> tree;
   final Offset pos;
+  final int selectedNodeId;
 
-  TreePainter({required this.tree, required this.pos});
+  TreePainter(
+      {required this.selectedNodeId, required this.tree, required this.pos});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -24,6 +26,13 @@ class TreePainter extends CustomPainter {
       ..color = Colors.green
       ..style = PaintingStyle.fill;
 
+    Paint selectedPaint = Paint()
+      ..color = Colors.orangeAccent
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.square
+      ..strokeJoin = StrokeJoin.bevel
+      ..strokeWidth = 5;
+
     Paint linePaint = Paint()..color = Colors.grey[700]!;
 
     // rysowanie poszczególnych węzłów
@@ -38,6 +47,11 @@ class TreePainter extends CustomPainter {
           Rect.fromLTWH(node.pos.dx + pos.dx, node.pos.dy + pos.dy, 50, 50),
           // squarePaint);
           (node.children.length <= 0 ? leafPaint : squarePaint));
+      if (node.id == selectedNodeId) {
+        canvas.drawRect(
+            Rect.fromLTWH(node.pos.dx + pos.dx, node.pos.dy + pos.dy, 50, 50),
+            selectedPaint);
+      }
     }
   }
 

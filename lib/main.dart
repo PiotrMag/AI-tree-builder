@@ -67,7 +67,14 @@ class _EditorPageState extends State<EditorPage> {
   Queue<TreeNode> treeNodeQueue = Queue();
   TreeNode? root;
 
+  List<TreeNode> treeNodes = [];
+
+  TreeNode? selectedTreeNode;
+  bool isMovingNode = false;
+
   bool isSnackbarShowing = false;
+
+  bool resetWaiting = false;
 
   int outputAttrIndex = -1;
 
@@ -120,6 +127,7 @@ class _EditorPageState extends State<EditorPage> {
       }
       setState(() {
         run = false;
+        resetWaiting = true;
       });
       return true;
     }
@@ -253,6 +261,9 @@ class _EditorPageState extends State<EditorPage> {
         currentNode.children.add(newNode);
 
         //
+        treeNodes.add(newNode);
+
+        //
         counter += 1;
       }
     }
@@ -285,6 +296,7 @@ class _EditorPageState extends State<EditorPage> {
             List<int>.generate(dataFrame.getRows().length, (index) => index);
         root!.pos = Offset(400, 400);
         treeNodeQueue.addLast(root!);
+        treeNodes.add(root!);
       }
       handleTimer();
     }
@@ -335,7 +347,10 @@ class _EditorPageState extends State<EditorPage> {
             left: 0,
             right: 0,
             child: CustomPaint(
-              foregroundPainter: TreePainter(tree: nodeToTree(root), pos: pos),
+              foregroundPainter: TreePainter(
+                  tree: treeNodes,
+                  pos: pos,
+                  selectedNodeId: selectedTreeNode?.id ?? -1),
             ),
           ),
           // Center(
@@ -351,8 +366,24 @@ class _EditorPageState extends State<EditorPage> {
                 ? SystemMouseCursors.move
                 : SystemMouseCursors.basic,
             child: GestureDetector(
+              onPanStart: (details) {
+                if (selectedTreeNode
+                        ?.getBoundingRect()
+                        .contains(details.localPosition - pos) ??
+                    false) {
+                  isMovingNode = true;
+                } else {
+                  isMovingNode = false;
+                }
+              },
               onPanUpdate: (details) {
-                if (selectedToolNumber == 2) {
+                if (selectedToolNumber == 1) {
+                  if (selectedTreeNode != null && isMovingNode) {
+                    setState(() {
+                      selectedTreeNode?.pos += details.delta;
+                    });
+                  }
+                } else if (selectedToolNumber == 2) {
                   setState(() {
                     pos += details.delta;
                   });
@@ -362,6 +393,30 @@ class _EditorPageState extends State<EditorPage> {
                 if (selectedToolNumber == 2) {
                   setState(() {
                     pos = Offset.zero;
+                  });
+                }
+              },
+              onTapDown: (details) {
+                if (selectedToolNumber == 1) {
+                  setState(() {
+                    print('Tap');
+                    Offset tapPos = details.localPosition;
+                    // sprawdzenie, czy któryś z węzłów został kliknięty
+                    TreeNode? clickedNode;
+                    for (TreeNode node in treeNodes.reversed) {
+                      if (node.getBoundingRect().contains(tapPos - pos)) {
+                        clickedNode = node;
+                        print(clickedNode);
+                        break;
+                      }
+                    }
+
+                    if (clickedNode != null) {
+                      treeNodes.remove(clickedNode);
+                      treeNodes.add(clickedNode);
+                    }
+
+                    selectedTreeNode = clickedNode;
                   });
                 }
               },
@@ -1053,9 +1108,15 @@ class _EditorPageState extends State<EditorPage> {
                     IconButtonWithTooltip(
                       icon: Icons.replay_rounded,
                       tooltipText: 'Wyczyść budowę drzewa',
+                      iconColor: resetWaiting ? Colors.white : Colors.black,
+                      backgroundColor:
+                          resetWaiting ? Colors.blue : Colors.white,
                       onPressed: () {
                         setState(() {
+                          treeNodes.clear();
                           root = null;
+                          resetWaiting = false;
+                          selectedTreeNode = null;
                         });
                       },
                     ),
