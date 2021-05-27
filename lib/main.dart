@@ -35,6 +35,12 @@ class EditorPage extends StatefulWidget {
   _EditorPageState createState() => _EditorPageState();
 }
 
+enum PointerState {
+  Up,
+  Down,
+  Dragging,
+}
+
 class _EditorPageState extends State<EditorPage> {
   GlobalKey<ScaffoldState> scaffoldKey = GlobalKey();
   GlobalKey<_TreeViewState> treeViewKey = GlobalKey();
@@ -60,7 +66,7 @@ class _EditorPageState extends State<EditorPage> {
 
   int selectedToolNumber = 1;
 
-  double sliderValue = 1.0;
+  double sliderValue = 0.25;
 
   SimpleValue<Offset> pos = SimpleValue(value: Offset.zero);
 
@@ -80,9 +86,12 @@ class _EditorPageState extends State<EditorPage> {
 
   int outputAttrIndex = -1;
 
-  //todo: usunąć zmienne pomocnicze
-  double width = 100, height = 100;
-  Color color = Colors.red;
+  // zmienne do obsługi kliknięć i przeciągania myszką
+  PointerState pointerState = PointerState.Up;
+  Offset? pointerDownStartPoint;
+  static const double dragStartDistance = 5;
+  static const double doubleClickThreshlod = 200;
+  int lastClickMillis = 0;
 
   @override
   void dispose() {
@@ -270,13 +279,7 @@ class _EditorPageState extends State<EditorPage> {
       }
     }
 
-    setState(() {
-      //todo: rysowanie węzłów
-      width = Random().nextInt(150) + 50;
-      height = Random().nextInt(150) + 50;
-      color = Color.fromARGB(255, Random().nextInt(255), Random().nextInt(255),
-          Random().nextInt(255));
-    });
+    setState(() {});
   }
 
   void onSimulationButtonTap(bool newValue) {
@@ -372,65 +375,152 @@ class _EditorPageState extends State<EditorPage> {
             cursor: selectedToolNumber == 2
                 ? SystemMouseCursors.move
                 : SystemMouseCursors.basic,
-            child: GestureDetector(
-              onPanStart: (details) {
-                if (selectedTreeNode.value?.getBoundingRect().contains(
-                        details.localPosition - (pos.value ?? Offset.zero)) ??
-                    false) {
-                  isMovingNode = true;
-                } else {
-                  isMovingNode = false;
+            child: Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: (event) {
+                if (pointerState == PointerState.Up) {
+                  pointerState = PointerState.Down;
+                  pointerDownStartPoint = event.localPosition;
                 }
               },
-              onPanUpdate: (details) {
-                if (selectedToolNumber == 1) {
-                  if (selectedTreeNode.value != null && isMovingNode) {
+              onPointerMove: (event) {
+                if (pointerState == PointerState.Down &&
+                    pointerDownStartPoint != null) {
+                  print(
+                      'dist ${(event.localPosition - pointerDownStartPoint!).distance}');
+                  if ((event.localPosition - pointerDownStartPoint!).distance >=
+                      dragStartDistance) {
+                    pointerState = PointerState.Dragging;
+                    if (selectedTreeNode.value?.getBoundingRect().contains(
+                            event.localPosition - (pos.value ?? Offset.zero)) ??
+                        false) {
+                      isMovingNode = true;
+                    } else {
+                      isMovingNode = false;
+                    }
+                  }
+                }
+
+                if (pointerState == PointerState.Dragging) {
+                  if (selectedToolNumber == 1) {
+                    if (selectedTreeNode.value != null && isMovingNode) {
+                      treeViewKey.currentState?.setState(() {
+                        selectedTreeNode.value?.pos += event.delta;
+                      });
+                    }
+                  } else if (selectedToolNumber == 2) {
                     treeViewKey.currentState?.setState(() {
-                      selectedTreeNode.value?.pos += details.delta;
+                      if (pos.value != null) {
+                        pos.value = event.delta + pos.value!;
+                      }
                     });
                   }
-                } else if (selectedToolNumber == 2) {
-                  treeViewKey.currentState?.setState(() {
-                    if (pos.value != null) {
-                      pos.value = details.delta + pos.value!;
-                    }
-                  });
                 }
               },
-              onDoubleTap: () {
-                if (selectedToolNumber == 2) {
-                  treeViewKey.currentState?.setState(() {
-                    pos.value = Offset.zero;
-                  });
-                }
-              },
-              onTapDown: (details) {
-                if (selectedToolNumber == 1) {
-                  treeViewKey.currentState?.setState(() {
-                    print('Tap');
-                    Offset tapPos = details.localPosition;
-                    // sprawdzenie, czy któryś z węzłów został kliknięty
-                    TreeNode? clickedNode;
-                    for (TreeNode node in treeNodes.reversed) {
-                      if (node
-                          .getBoundingRect()
-                          .contains(tapPos - (pos.value ?? Offset.zero))) {
-                        clickedNode = node;
-                        print(clickedNode);
-                        break;
-                      }
-                    }
+              onPointerUp: (event) {
+                if (pointerState == PointerState.Down) {
+                  if (DateTime.now().millisecondsSinceEpoch - lastClickMillis >=
+                      doubleClickThreshlod) {
+                    // pojednycze kliknięcie
+                    if (selectedToolNumber == 1) {
+                      treeViewKey.currentState?.setState(() {
+                        print('Tap');
+                        Offset tapPos = event.localPosition;
+                        // sprawdzenie, czy któryś z węzłów został kliknięty
+                        TreeNode? clickedNode;
+                        for (TreeNode node in treeNodes.reversed) {
+                          if (node
+                              .getBoundingRect()
+                              .contains(tapPos - (pos.value ?? Offset.zero))) {
+                            clickedNode = node;
+                            print(clickedNode);
+                            break;
+                          }
+                        }
 
-                    if (clickedNode != null) {
-                      treeNodes.remove(clickedNode);
-                      treeNodes.add(clickedNode);
-                    }
+                        if (clickedNode != null) {
+                          treeNodes.remove(clickedNode);
+                          treeNodes.add(clickedNode);
+                        }
 
-                    selectedTreeNode.value = clickedNode;
-                  });
+                        selectedTreeNode.value = clickedNode;
+                      });
+                    }
+                  } else {
+                    // podwójne kliknięcie
+                    print('DoubleTAP');
+                    if (selectedToolNumber == 2) {
+                      treeViewKey.currentState?.setState(() {
+                        pos.value = Offset.zero;
+                      });
+                    }
+                  }
+                  lastClickMillis = DateTime.now().millisecondsSinceEpoch;
                 }
+
+                pointerState = PointerState.Up;
               },
             ),
+
+            // GestureDetector(
+            //   onPanStart: (details) {
+            //     if (selectedTreeNode.value?.getBoundingRect().contains(
+            //             details.localPosition - (pos.value ?? Offset.zero)) ??
+            //         false) {
+            //       isMovingNode = true;
+            //     } else {
+            //       isMovingNode = false;
+            //     }
+            //   },
+            //   onPanUpdate: (details) {
+            //     if (selectedToolNumber == 1) {
+            //       if (selectedTreeNode.value != null && isMovingNode) {
+            //         treeViewKey.currentState?.setState(() {
+            //           selectedTreeNode.value?.pos += details.delta;
+            //         });
+            //       }
+            //     } else if (selectedToolNumber == 2) {
+            //       treeViewKey.currentState?.setState(() {
+            //         if (pos.value != null) {
+            //           pos.value = details.delta + pos.value!;
+            //         }
+            //       });
+            //     }
+            //   },
+            //   onDoubleTap: () {
+            //     if (selectedToolNumber == 2) {
+            //       treeViewKey.currentState?.setState(() {
+            //         pos.value = Offset.zero;
+            //       });
+            //     }
+            //   },
+            //   onTapDown: (details) {
+            //     if (selectedToolNumber == 1) {
+            //       treeViewKey.currentState?.setState(() {
+            //         print('Tap');
+            //         Offset tapPos = details.localPosition;
+            //         // sprawdzenie, czy któryś z węzłów został kliknięty
+            //         TreeNode? clickedNode;
+            //         for (TreeNode node in treeNodes.reversed) {
+            //           if (node
+            //               .getBoundingRect()
+            //               .contains(tapPos - (pos.value ?? Offset.zero))) {
+            //             clickedNode = node;
+            //             print(clickedNode);
+            //             break;
+            //           }
+            //         }
+
+            //         if (clickedNode != null) {
+            //           treeNodes.remove(clickedNode);
+            //           treeNodes.add(clickedNode);
+            //         }
+
+            //         selectedTreeNode.value = clickedNode;
+            //       });
+            //     }
+            //   },
+            // ),
           ),
           AnimatedPositioned(
             duration: Duration(milliseconds: 250),
@@ -1155,7 +1245,7 @@ class _EditorPageState extends State<EditorPage> {
                 padding: const EdgeInsets.all(8.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: [Text('offset: $pos')],
+                  children: [Text('offset: ${pos.value}')],
                 ),
               ),
             ),
