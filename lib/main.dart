@@ -359,6 +359,7 @@ class _EditorPageState extends State<EditorPage> {
             right: 0,
             child: TreeView(
                 key: treeViewKey,
+                dataFrame: dataFrame,
                 treeNodes: treeNodes,
                 pos: pos,
                 selectedTreeNode: selectedTreeNode),
@@ -1262,8 +1263,10 @@ class TreeView extends StatefulWidget {
     required this.treeNodes,
     required this.pos,
     required this.selectedTreeNode,
+    required this.dataFrame,
   }) : super(key: key);
 
+  final DataFrame dataFrame;
   final List<TreeNode> treeNodes;
   final SimpleValue<Offset> pos;
   final SimpleValue<TreeNode>? selectedTreeNode;
@@ -1277,9 +1280,11 @@ class _TreeViewState extends State<TreeView> {
   Widget build(BuildContext context) {
     return CustomPaint(
       foregroundPainter: TreePainter(
+          dataFrame: widget.dataFrame,
           tree: widget.treeNodes,
           pos: widget.pos.value ?? Offset.zero,
-          selectedNodeId: widget.selectedTreeNode?.value?.id ?? -1),
+          selectedNodeId: widget.selectedTreeNode?.value?.id ?? -1,
+          padding: EdgeInsets.all(8)),
     );
   }
 }

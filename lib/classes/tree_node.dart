@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 
 class TreeNode {
   static int _idCounter = 0;
@@ -38,9 +39,11 @@ class TreeNode {
   // położenie węzła na stronie (potrzebne do rysowania węzła)
   Offset pos = Offset.zero;
 
+  // zmienna pomocnicza przechowująca rozmiar danego węzła
+  Offset? size = Offset.zero;
+
   Rect getBoundingRect() {
-    return Rect.fromLTWH(
-        pos.dx, pos.dy, 50, 50); //todo: zminić wyliczanie rozmiaru
+    return Rect.fromLTWH(pos.dx, pos.dy, size?.dx ?? 0, size?.dy ?? 0);
   }
 
   TreeNode() {
