@@ -3,24 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:tree_builder/classes/dataframe.dart';
 
 import 'tree_node.dart';
+import '../util/pl.dart';
 
 class TreePainter extends CustomPainter {
   final List<TreeNode> tree;
   final Offset pos;
   final int selectedNodeId;
-  final EdgeInsets padding;
-  final DataFrame dataFrame;
-  final double? samplesBarWidth;
-  final double samplesBarHeight;
 
   TreePainter({
     required this.selectedNodeId,
     required this.tree,
     required this.pos,
-    required this.padding,
-    required this.dataFrame,
-    required this.samplesBarWidth,
-    required this.samplesBarHeight,
   });
 
   @override
@@ -56,8 +49,6 @@ class TreePainter extends CustomPainter {
       backgroundColor: Colors.white,
     );
 
-    List<String> dataFrameHeaders = dataFrame.getHeaders();
-
     // rysowanie poszczególnych węzłów
     for (TreeNode node in tree) {
       // wstępne przygotowanie tekstu w węźle
@@ -66,14 +57,14 @@ class TreePainter extends CustomPainter {
           if (node.splitArgId > -1) ...{
             TextSpan(
               style: nodeTextStyle,
-              text:
-                  node.splitArgId >= 0 ? dataFrameHeaders[node.splitArgId] : '',
+              text: node.splitArgName,
             ),
             TextSpan(text: '\n'),
           },
           TextSpan(
             style: nodeTextStyle,
-            text: '${node.samplesIds.length} obiektów',
+            text:
+                '${node.samplesIds.length} ${objectPluralPL(node.samplesIds.length)}',
           ),
         ],
       );
@@ -84,33 +75,37 @@ class TreePainter extends CustomPainter {
       np.layout();
 
       double barWidth = 0;
-      if (samplesBarWidth != null) {
-        barWidth = samplesBarWidth!;
+      if (node.barWidth != null) {
+        barWidth = node.barWidth!;
       } else {
-        barWidth = np.width + padding.left + padding.right;
+        barWidth = np.width;
       }
 
+      // po to, żeby węzeł zaaktulaizował swój rozmiar
+      node.getBoundingRect();
+
       // przeliczenie rozmiaru węzła
-      Offset nodeSize = Offset(np.width + padding.left + padding.right,
-          np.height + padding.top + padding.bottom + samplesBarHeight);
-      if (nodeSize.dx < barWidth + padding.left + padding.right) {
-        nodeSize = Offset(barWidth + padding.left + padding.right, nodeSize.dy);
-      }
-      if (nodeSize.dx < 40) {
-        nodeSize = Offset(40, nodeSize.dy);
-      }
-      if (nodeSize.dy < 40) {
-        nodeSize = Offset(nodeSize.dx, 40);
-      }
-      node.size = nodeSize;
+      // Size nodeSize = Size(np.width + node.padding.left + node.padding.right,
+      //     np.height + node.padding.top + node.padding.bottom + node.barHeight);
+      // if (nodeSize.width < barWidth + node.padding.left + node.padding.right) {
+      //   nodeSize = Size(
+      //       barWidth + node.padding.left + node.padding.right, nodeSize.height);
+      // }
+      // if (nodeSize.width < 40) {
+      //   nodeSize = Size(40, nodeSize.height);
+      // }
+      // if (nodeSize.height < 40) {
+      //   nodeSize = Size(nodeSize.width, 40);
+      // }
+      // node.size = nodeSize;
 
       if (node.parent != null) {
         // rysowanie linii
         Offset lineFirstEnd =
-            Offset(node.pos.dx + (node.size?.dx ?? 0) / 2, node.pos.dy) + pos;
+            Offset(node.pos.dx + node.size.width / 2, node.pos.dy) + pos;
         Offset lineSecondEnd = Offset(
-                node.parent!.pos.dx + (node.parent!.size?.dx ?? 0) / 2,
-                node.parent!.pos.dy + (node.parent!.size?.dy ?? 0)) +
+                node.parent!.pos.dx + node.parent!.size.width / 2,
+                node.parent!.pos.dy + node.parent!.size.height) +
             pos;
         canvas.drawLine(lineFirstEnd, lineSecondEnd, linePaint);
         // rysowanie oznaczeń na liniach
@@ -128,7 +123,7 @@ class TreePainter extends CustomPainter {
       // rysowanie tła węzła
       canvas.drawRect(
           Rect.fromLTWH(node.pos.dx + pos.dx, node.pos.dy + pos.dy,
-              node.size?.dx ?? 10, node.size?.dy ?? 10),
+              node.size.width, node.size.height),
           // squarePaint);
           (node.children.length <= 0 ? leafPaint : parentPaint));
 
@@ -145,12 +140,12 @@ class TreePainter extends CustomPainter {
           canvas.drawRect(
               Rect.fromLTWH(
                   node.pos.dx +
-                      padding.left +
+                      node.padding.left +
                       counter / totalCount * barWidth +
                       pos.dx,
-                  node.pos.dy + padding.top + np.height + 5 + pos.dy,
+                  node.pos.dy + node.padding.top + np.height + 5 + pos.dy,
                   entry.value / totalCount * barWidth,
-                  samplesBarHeight),
+                  node.barHeight),
               barPaint);
           counter += entry.value;
         }
@@ -160,8 +155,8 @@ class TreePainter extends CustomPainter {
       // if (node.splitArgId >= 0) {
       np.paint(
           canvas,
-          Offset(node.pos.dx + (node.size?.dx ?? 0) / 2,
-                  node.pos.dy + padding.top) +
+          Offset(node.pos.dx + node.size.width / 2,
+                  node.pos.dy + node.padding.top) +
               pos -
               Offset(np.width / 2, 0));
       // }
@@ -170,7 +165,7 @@ class TreePainter extends CustomPainter {
       if (node.id == selectedNodeId) {
         canvas.drawRect(
             Rect.fromLTWH(node.pos.dx + pos.dx, node.pos.dy + pos.dy,
-                node.size?.dx ?? 10, node.size?.dy ?? 10),
+                node.size.width, node.size.height),
             selectedPaint);
       }
     }

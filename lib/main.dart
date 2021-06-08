@@ -235,29 +235,33 @@ class _EditorPageState extends State<EditorPage> {
       for (var node in visitList.reversed) {
         node.neededWidth +=
             max(node.children.length - 1, 0) * 30; //TODO: usunąć stałą 30
-        double neededWidth =
-            max(node.neededWidth, node.getBoundingRect().width);
+        node.neededWidth = max(node.neededWidth, node.getBoundingRect().width);
         if (node.parent != null) {
-          node.parent!.neededWidth += neededWidth;
+          node.parent!.neededWidth += node.neededWidth;
         }
       }
 
       // odpowiednie zaaktualizowanie pozycji odpowiednich węzłów
       for (var node in visitList) {
-        if (node.parent != null) {
-          double currentHorizontalOffset = 0;
-          for (var child in node.children) {
+        // if (node.parent != null) {
+        double currentHorizontalOffset = 0;
+        for (var child in node.children) {
+          if (child.size != Size.zero) {
+            currentHorizontalOffset +=
+                child.neededWidth / 2 - child.size.width / 2;
             child.pos = Offset(
               node.pos.dx +
+                  node.size.width / 2 +
                   currentHorizontalOffset -
-                  node.neededWidth / 2 +
-                  (pos.value?.dx ?? 0),
-              node.pos.dy + 100 + (pos.value?.dy ?? 0), //TODO; usunąć stałą 100
+                  node.neededWidth / 2,
+              node.pos.dy + 150, //TODO; usunąć stałą 150
             );
-            currentHorizontalOffset +=
-                child.neededWidth + 30; //TODO: usunąć stałą 30
+            currentHorizontalOffset += child.neededWidth / 2 +
+                child.size.width / 2 +
+                30; //TODO: usunąć stałą 30
           }
         }
+        // }
       }
     }
   }
@@ -293,6 +297,8 @@ class _EditorPageState extends State<EditorPage> {
     }
 
     currentNode.splitArgId = bestAttrIndex;
+    currentNode.splitArgName =
+        bestAttrIndex > -1 ? dataFrame.getHeaders()[bestAttrIndex] : '';
     if (bestAttrIndex >= 0) {
       List<String?> attrValues =
           samples.map((e) => e.value[bestAttrIndex]).toList();
@@ -309,13 +315,13 @@ class _EditorPageState extends State<EditorPage> {
             List<int>.from(currentNode.availableSplitArgs);
         newNode.availableSplitArgs.remove(bestAttrIndex);
         newNode.parent = currentNode;
-        newNode.pos = Offset(
-            uniqueClasses.length > 1
-                ? (-100 +
-                    200 / (uniqueClasses.length - 1) * counter +
-                    currentNode.pos.dx)
-                : newNode.parent?.pos.dx ?? 0,
-            currentNode.pos.dy + 100);
+        // newNode.pos = Offset(
+        //     uniqueClasses.length > 1
+        //         ? (-100 +
+        //             200 / (uniqueClasses.length - 1) * counter +
+        //             currentNode.pos.dx)
+        //         : newNode.parent?.pos.dx ?? 0,
+        //     currentNode.pos.dy + 100);
         newNode.value = c ?? 'null';
         newNode.samplesIds = samples
             .where((e) => e.value[bestAttrIndex] == c)
@@ -354,7 +360,9 @@ class _EditorPageState extends State<EditorPage> {
       }
     }
 
-    treeViewKey.currentState?.setState(() {});
+    treeViewKey.currentState?.setState(() {
+      adjustNodesPosition();
+    });
   }
 
   void onSimulationButtonTap(bool newValue) {
@@ -1422,13 +1430,10 @@ class _TreeViewState extends State<TreeView> {
   Widget build(BuildContext context) {
     return CustomPaint(
       foregroundPainter: TreePainter(
-          dataFrame: widget.dataFrame,
-          tree: widget.treeNodes,
-          pos: widget.pos.value ?? Offset.zero,
-          selectedNodeId: widget.selectedTreeNode?.value?.id ?? -1,
-          padding: EdgeInsets.fromLTRB(8, 8, 8, 12),
-          samplesBarWidth: null,
-          samplesBarHeight: 10),
+        tree: widget.treeNodes,
+        pos: widget.pos.value ?? Offset.zero,
+        selectedNodeId: widget.selectedTreeNode?.value?.id ?? -1,
+      ),
     );
   }
 }
