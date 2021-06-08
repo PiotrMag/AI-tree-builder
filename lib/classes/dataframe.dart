@@ -7,6 +7,12 @@ class DataFrame {
     _rows = [];
   }
 
+  // Czyści DataFrame
+  void clear() {
+    _rows.clear();
+    _headers.clear();
+  }
+
   // Dodaje nową kolumnę do [DataFrame]
   //
   // Należy podać nazwę kolumny, która ma zostać utworzona

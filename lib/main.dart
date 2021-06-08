@@ -193,6 +193,75 @@ class _EditorPageState extends State<EditorPage> {
     return giniSplitValue;
   }
 
+  void countDecisionValues(TreeNode node) {
+    Map<String, int> decisionValuesCount = Map();
+    for (int id in node.samplesIds) {
+      List<String?> row = dataFrame.getRows()[id];
+      String? decisionValue = row[(outputAttrIndex < 0
+          ? dataFrame.getHeaders().length - 1
+          : outputAttrIndex)];
+      if (!decisionValuesCount.keys.contains(decisionValue)) {
+        decisionValuesCount[decisionValue ?? 'null'] = 1;
+      } else {
+        decisionValuesCount[decisionValue ?? 'null'] =
+            decisionValuesCount[decisionValue ?? 'null']! + 1;
+      }
+    }
+    node.samplesDecisionCount = decisionValuesCount;
+  }
+
+  // Funkcja pooprawiająca rozmieszczenie węzłów drzewa
+  // obliczając miejsce, jakie potrzebuje każde z poddrzew
+  void adjustNodesPosition() {
+    print('adjust');
+    if (root != null) {
+      List<TreeNode> visitList = [];
+      root!.neededWidth = 0;
+      visitList.add(root!);
+
+      int i = 0;
+      TreeNode currentNode;
+
+      while (i < visitList.length) {
+        currentNode = visitList[i];
+        for (var child in currentNode.children) {
+          child.neededWidth = 0;
+          visitList.add(child);
+        }
+        i++;
+      }
+
+      // przeliczenie miejsca potrzebnego dla każdego z poddrzew
+      for (var node in visitList.reversed) {
+        node.neededWidth +=
+            max(node.children.length - 1, 0) * 30; //TODO: usunąć stałą 30
+        double neededWidth =
+            max(node.neededWidth, node.getBoundingRect().width);
+        if (node.parent != null) {
+          node.parent!.neededWidth += neededWidth;
+        }
+      }
+
+      // odpowiednie zaaktualizowanie pozycji odpowiednich węzłów
+      for (var node in visitList) {
+        if (node.parent != null) {
+          double currentHorizontalOffset = 0;
+          for (var child in node.children) {
+            child.pos = Offset(
+              node.pos.dx +
+                  currentHorizontalOffset -
+                  node.neededWidth / 2 +
+                  (pos.value?.dx ?? 0),
+              node.pos.dy + 100 + (pos.value?.dy ?? 0), //TODO; usunąć stałą 100
+            );
+            currentHorizontalOffset +=
+                child.neededWidth + 30; //TODO: usunąć stałą 30
+          }
+        }
+      }
+    }
+  }
+
   void makeStep() {
     TreeNode currentNode = treeNodeQueue.removeFirst();
 
@@ -241,15 +310,18 @@ class _EditorPageState extends State<EditorPage> {
         newNode.availableSplitArgs.remove(bestAttrIndex);
         newNode.parent = currentNode;
         newNode.pos = Offset(
-            -100 +
-                200 / (uniqueClasses.length - 1) * counter +
-                currentNode.pos.dx,
+            uniqueClasses.length > 1
+                ? (-100 +
+                    200 / (uniqueClasses.length - 1) * counter +
+                    currentNode.pos.dx)
+                : newNode.parent?.pos.dx ?? 0,
             currentNode.pos.dy + 100);
         newNode.value = c ?? 'null';
         newNode.samplesIds = samples
             .where((e) => e.value[bestAttrIndex] == c)
             .map((e) => e.key)
             .toList();
+        countDecisionValues(newNode);
 
         // utworzenie listy próbek, które należą do klasy [c]
         List<List<String?>> classSamples = samples
@@ -260,11 +332,14 @@ class _EditorPageState extends State<EditorPage> {
         // jeżeli gini index dla danej klasy != 0, to znaczy, że nie powstał liść
         // i należy ten nowy węzeł dodać do kolejki do podziału
         if (gini(
-                classSamples,
-                (outputAttrIndex < 0
-                    ? dataFrame.getHeaders().length - 1
-                    : outputAttrIndex)) !=
-            0) {
+                    classSamples,
+                    (outputAttrIndex < 0
+                        ? dataFrame.getHeaders().length - 1
+                        : outputAttrIndex)) !=
+                0 &&
+            (newNode.samplesDecisionCount?.length ?? 0) > 1) {
+          print(
+              'gini: ${gini(classSamples, (outputAttrIndex < 0 ? dataFrame.getHeaders().length - 1 : outputAttrIndex))}');
           treeNodeQueue.addLast(newNode);
         }
 
@@ -279,7 +354,7 @@ class _EditorPageState extends State<EditorPage> {
       }
     }
 
-    setState(() {});
+    treeViewKey.currentState?.setState(() {});
   }
 
   void onSimulationButtonTap(bool newValue) {
@@ -301,6 +376,7 @@ class _EditorPageState extends State<EditorPage> {
             List<int>.generate(dataFrame.getRows().length, (index) => index);
         root!.pos = Offset(MediaQuery.of(context).size.width / 2,
             MediaQuery.of(context).size.height / 2);
+        countDecisionValues(root!);
         treeNodeQueue.addLast(root!);
         treeNodes.add(root!);
         simulationTimer =
@@ -342,6 +418,31 @@ class _EditorPageState extends State<EditorPage> {
     }
 
     return tree;
+  }
+
+  void loadSampleData() {
+    dataFrame.clear();
+    dataFrame.addColumn('a');
+    dataFrame.addColumn('b');
+    dataFrame.addColumn('out');
+
+    dataFrame.addRow(['1', '2', '1']);
+    dataFrame.addRow(['2', '1', '2']);
+    dataFrame.addRow(['4', '2', '2']);
+    dataFrame.addRow(['4', '1', '1']);
+    dataFrame.addRow(['5', '3', '1']);
+    dataFrame.addRow(['7', '4', '2']);
+    dataFrame.addRow(['3', '4', '3']);
+    dataFrame.addRow(['9', '1', '2']);
+    dataFrame.addRow(['7', '4', '3']);
+    dataFrame.addRow(['2', '8', '2']);
+    dataFrame.addRow(['5', '9', '2']);
+    dataFrame.addRow(['3', '1', '1']);
+
+    inputTableCheckedItems =
+        List.generate(dataFrame.getRows().length, (index) => false);
+
+    setState(() {});
   }
 
   @override
@@ -1040,6 +1141,47 @@ class _EditorPageState extends State<EditorPage> {
               ),
             ),
           ),
+          AnimatedPositioned(
+            duration: Duration(milliseconds: 250),
+            curve: Curves.ease,
+            top: 70,
+            bottom: 0,
+            right: showSettings ? 0 : -350,
+            child: Container(
+              width: 350,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 2,
+                    color: Colors.black.withAlpha(50),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                    child: Text(
+                      'Opcje',
+                      style: TextStyle(fontSize: 20),
+                    ),
+                  ),
+                  Divider(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 10),
+                    child: ElevatedButton(
+                      child: Text('Ładuj przykładowe dane'),
+                      onPressed: () {
+                        loadSampleData();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           if (showSpeedSelector) ...{
             Align(
               alignment: Alignment.topCenter,
@@ -1284,7 +1426,9 @@ class _TreeViewState extends State<TreeView> {
           tree: widget.treeNodes,
           pos: widget.pos.value ?? Offset.zero,
           selectedNodeId: widget.selectedTreeNode?.value?.id ?? -1,
-          padding: EdgeInsets.all(8)),
+          padding: EdgeInsets.fromLTRB(8, 8, 8, 12),
+          samplesBarWidth: null,
+          samplesBarHeight: 10),
     );
   }
 }

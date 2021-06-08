@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:tree_builder/classes/dataframe.dart';
 
@@ -11,13 +10,18 @@ class TreePainter extends CustomPainter {
   final int selectedNodeId;
   final EdgeInsets padding;
   final DataFrame dataFrame;
+  final double? samplesBarWidth;
+  final double samplesBarHeight;
 
-  TreePainter(
-      {required this.selectedNodeId,
-      required this.tree,
-      required this.pos,
-      required this.padding,
-      required this.dataFrame});
+  TreePainter({
+    required this.selectedNodeId,
+    required this.tree,
+    required this.pos,
+    required this.padding,
+    required this.dataFrame,
+    required this.samplesBarWidth,
+    required this.samplesBarHeight,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -58,17 +62,40 @@ class TreePainter extends CustomPainter {
     for (TreeNode node in tree) {
       // wstępne przygotowanie tekstu w węźle
       TextSpan span = TextSpan(
-          style: nodeTextStyle,
-          text: node.splitArgId >= 0 ? dataFrameHeaders[node.splitArgId] : '');
+        children: [
+          if (node.splitArgId > -1) ...{
+            TextSpan(
+              style: nodeTextStyle,
+              text:
+                  node.splitArgId >= 0 ? dataFrameHeaders[node.splitArgId] : '',
+            ),
+            TextSpan(text: '\n'),
+          },
+          TextSpan(
+            style: nodeTextStyle,
+            text: '${node.samplesIds.length} obiektów',
+          ),
+        ],
+      );
       TextPainter np = TextPainter(
         text: span,
         textDirection: TextDirection.ltr,
       );
       np.layout();
 
+      double barWidth = 0;
+      if (samplesBarWidth != null) {
+        barWidth = samplesBarWidth!;
+      } else {
+        barWidth = np.width + padding.left + padding.right;
+      }
+
       // przeliczenie rozmiaru węzła
       Offset nodeSize = Offset(np.width + padding.left + padding.right,
-          np.height + padding.top + padding.bottom);
+          np.height + padding.top + padding.bottom + samplesBarHeight);
+      if (nodeSize.dx < barWidth + padding.left + padding.right) {
+        nodeSize = Offset(barWidth + padding.left + padding.right, nodeSize.dy);
+      }
       if (nodeSize.dx < 40) {
         nodeSize = Offset(40, nodeSize.dy);
       }
@@ -97,24 +124,54 @@ class TreePainter extends CustomPainter {
         tp.layout();
         tp.paint(canvas, lineMiddle - Offset(tp.width / 2, tp.height / 2));
       }
+
+      // rysowanie tła węzła
       canvas.drawRect(
           Rect.fromLTWH(node.pos.dx + pos.dx, node.pos.dy + pos.dy,
               node.size?.dx ?? 10, node.size?.dy ?? 10),
           // squarePaint);
           (node.children.length <= 0 ? leafPaint : parentPaint));
+
+      // wyrysowanie wykresu z podziałem próbek względem atrybutu decyzyjnego
+      int totalCount = 0;
+      int counter = 0;
+      node.samplesDecisionCount?.forEach((key, value) => totalCount += value);
+      if (node.samplesDecisionCount != null) {
+        for (var entry in node.samplesDecisionCount!.entries) {
+          Paint barPaint = Paint()
+            ..color = Color.fromARGB(255, entry.key.hashCode,
+                entry.key.hashCode, entry.key.hashCode);
+
+          canvas.drawRect(
+              Rect.fromLTWH(
+                  node.pos.dx +
+                      padding.left +
+                      counter / totalCount * barWidth +
+                      pos.dx,
+                  node.pos.dy + padding.top + np.height + 5 + pos.dy,
+                  entry.value / totalCount * barWidth,
+                  samplesBarHeight),
+              barPaint);
+          counter += entry.value;
+        }
+      }
+
+      // ewentualne wypisanie nazwy atrybutu, względem którego nastąpił podział
+      // if (node.splitArgId >= 0) {
+      np.paint(
+          canvas,
+          Offset(node.pos.dx + (node.size?.dx ?? 0) / 2,
+                  node.pos.dy + padding.top) +
+              pos -
+              Offset(np.width / 2, 0));
+      // }
+
+      // ewentualne rysowanie krawędzi węzła (jeżeli węzł jest obecnie zaznaczony)
       if (node.id == selectedNodeId) {
         canvas.drawRect(
             Rect.fromLTWH(node.pos.dx + pos.dx, node.pos.dy + pos.dy,
                 node.size?.dx ?? 10, node.size?.dy ?? 10),
             selectedPaint);
-      }
-      if (node.splitArgId >= 0) {
-        np.paint(
-            canvas,
-            Offset(node.pos.dx + (node.size?.dx ?? 0) / 2,
-                    node.pos.dy + (node.size?.dy ?? 0) / 2) +
-                pos -
-                Offset(np.width / 2, np.height / 2));
       }
     }
   }

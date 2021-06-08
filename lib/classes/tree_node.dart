@@ -42,6 +42,16 @@ class TreeNode {
   // zmienna pomocnicza przechowująca rozmiar danego węzła
   Offset? size = Offset.zero;
 
+  // zmienna pomocnicza przechowująca ilość poszczególnych wartości
+  // atrybutu decyzyjnego (po to, żeby później można było wyświetlić
+  // wykres poziomy na węźle)
+  Map<String, int>? samplesDecisionCount;
+
+  // zmienna pomocnicza przechowująca informację o tym
+  // jaką szerokość będzie potrzebowało poddrzewo zaczynające
+  // się od danego węzła
+  double neededWidth = 0;
+
   Rect getBoundingRect() {
     return Rect.fromLTWH(pos.dx, pos.dy, size?.dx ?? 0, size?.dy ?? 0);
   }
