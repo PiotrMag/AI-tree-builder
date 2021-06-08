@@ -65,6 +65,7 @@ class _EditorPageState extends State<EditorPage> {
   bool run = false;
 
   int selectedToolNumber = 1;
+  int selectedMenuNumber = 0;
 
   double sliderValue = 0.25;
 
@@ -635,7 +636,7 @@ class _EditorPageState extends State<EditorPage> {
           AnimatedPositioned(
             duration: Duration(milliseconds: 250),
             curve: Curves.ease,
-            bottom: showDataInput ? 0 : -size.height - 70,
+            bottom: selectedMenuNumber == 1 ? 0 : -size.height - 70,
             left: 0,
             right: 0,
             child: Container(
@@ -1123,7 +1124,7 @@ class _EditorPageState extends State<EditorPage> {
             curve: Curves.ease,
             top: 70,
             bottom: 0,
-            right: showStats ? 0 : -350,
+            right: selectedMenuNumber == 2 ? 0 : -350,
             child: Container(
               width: 350,
               decoration: BoxDecoration(
@@ -1154,7 +1155,7 @@ class _EditorPageState extends State<EditorPage> {
             curve: Curves.ease,
             top: 70,
             bottom: 0,
-            right: showSettings ? 0 : -350,
+            right: selectedMenuNumber == 3 ? 0 : -350,
             child: Container(
               width: 350,
               decoration: BoxDecoration(
@@ -1183,6 +1184,28 @@ class _EditorPageState extends State<EditorPage> {
                       child: Text('Ładuj przykładowe dane'),
                       onPressed: () {
                         loadSampleData();
+                        ScaffoldMessenger.maybeOf(scaffoldKey.currentContext!)
+                            ?.showSnackBar(
+                          SnackBar(
+                            backgroundColor: Colors.blue,
+                            duration: Duration(seconds: 2),
+                            // padding: EdgeInsets.all(8),
+                            elevation: 4,
+                            content: Row(
+                              children: [
+                                Icon(
+                                  Icons.task_alt,
+                                  color: Colors.white,
+                                ),
+                                SizedBox(width: 16),
+                                Text(
+                                  'Załadowano dane',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
                       },
                     ),
                   ),
@@ -1288,12 +1311,17 @@ class _EditorPageState extends State<EditorPage> {
                     IconButtonWithTooltip(
                       icon: Icons.assignment,
                       tooltipText: 'Dane wejściowe',
-                      iconColor: showDataInput ? Colors.white : Colors.black,
+                      iconColor:
+                          selectedMenuNumber == 1 ? Colors.white : Colors.black,
                       backgroundColor:
-                          showDataInput ? Colors.blue : Colors.white,
+                          selectedMenuNumber == 1 ? Colors.blue : Colors.white,
                       onPressed: () {
                         setState(() {
-                          showDataInput = !showDataInput;
+                          if (selectedMenuNumber == 1) {
+                            selectedMenuNumber = 0;
+                          } else {
+                            selectedMenuNumber = 1;
+                          }
                         });
                       },
                     ),
@@ -1301,11 +1329,17 @@ class _EditorPageState extends State<EditorPage> {
                     IconButtonWithTooltip(
                       icon: Icons.analytics,
                       tooltipText: 'Statystyki drzewa',
-                      iconColor: showStats ? Colors.white : Colors.black,
-                      backgroundColor: showStats ? Colors.blue : Colors.white,
+                      iconColor:
+                          selectedMenuNumber == 2 ? Colors.white : Colors.black,
+                      backgroundColor:
+                          selectedMenuNumber == 2 ? Colors.blue : Colors.white,
                       onPressed: () {
                         setState(() {
-                          showStats = !showStats;
+                          if (selectedMenuNumber == 2) {
+                            selectedMenuNumber = 0;
+                          } else {
+                            selectedMenuNumber = 2;
+                          }
                         });
                       },
                     ),
@@ -1313,12 +1347,17 @@ class _EditorPageState extends State<EditorPage> {
                     IconButtonWithTooltip(
                       icon: Icons.settings,
                       tooltipText: 'Ustawienia aplikacji',
-                      iconColor: showSettings ? Colors.white : Colors.black,
+                      iconColor:
+                          selectedMenuNumber == 3 ? Colors.white : Colors.black,
                       backgroundColor:
-                          showSettings ? Colors.blue : Colors.white,
+                          selectedMenuNumber == 3 ? Colors.blue : Colors.white,
                       onPressed: () {
                         setState(() {
-                          showSettings = !showSettings;
+                          if (selectedMenuNumber == 3) {
+                            selectedMenuNumber = 0;
+                          } else {
+                            selectedMenuNumber = 3;
+                          }
                         });
                       },
                     ),
