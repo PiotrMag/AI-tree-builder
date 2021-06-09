@@ -68,6 +68,10 @@ class TreeNode {
   // położenie węzła na stronie (potrzebne do rysowania węzła)
   Offset pos = Offset.zero;
 
+  // zmienne pomocnicze do poprawnego animowania położenia węzła
+  Offset startPos = Offset.zero;
+  Offset endPos = Offset.zero;
+
   // zmienna pomocnicza przechowująca rozmiar danego węzła
   Size size = Size.zero;
 
@@ -168,7 +172,10 @@ class TreeNode {
     return Rect.fromLTWH(pos.dx, pos.dy, size.width, size.height);
   }
 
-  TreeNode() {
+  TreeNode({Offset startingPos = Offset.zero}) {
+    pos = startingPos;
+    startPos = startingPos;
+    endPos = startingPos;
     _id = _idCounter;
     _idCounter += 1;
   }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:html';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -41,7 +40,8 @@ enum PointerState {
   Dragging,
 }
 
-class _EditorPageState extends State<EditorPage> {
+class _EditorPageState extends State<EditorPage>
+    with SingleTickerProviderStateMixin {
   GlobalKey<ScaffoldState> scaffoldKey = GlobalKey();
   GlobalKey<_TreeViewState> treeViewKey = GlobalKey();
 
@@ -55,6 +55,9 @@ class _EditorPageState extends State<EditorPage> {
 
   ScrollController inputTableVerticalScrollConstroller = ScrollController();
   ScrollController inputTableHorizontalScrollConstroller = ScrollController();
+
+  AnimationController? treeRebuildController;
+  CurvedAnimation? animation;
 
   bool showDataInput = false;
   bool showStats = false;
@@ -95,6 +98,36 @@ class _EditorPageState extends State<EditorPage> {
   int lastClickMillis = 0;
 
   @override
+  void initState() {
+    treeRebuildController = AnimationController(
+      vsync: this,
+    );
+    animation =
+        CurvedAnimation(parent: treeRebuildController!, curve: Curves.ease);
+    treeRebuildController!.addListener(animationListener);
+    treeRebuildController!.addStatusListener((status) {
+      if (status == AnimationStatus.completed ||
+          status == AnimationStatus.dismissed) {
+        for (TreeNode node in treeNodes) {
+          node.startPos = node.pos;
+        }
+      }
+    });
+    super.initState();
+  }
+
+  void animationListener() {
+    if (treeRebuildController != null) {
+      treeViewKey.currentState?.setState(() {
+        for (TreeNode node in treeNodes) {
+          node.pos = Tween<Offset>(begin: node.startPos, end: node.endPos)
+              .transform(animation!.value);
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     columnNameEditorFocusNode.dispose();
     addRowFormControllers.forEach((element) {
@@ -104,6 +137,7 @@ class _EditorPageState extends State<EditorPage> {
     inputTableHorizontalScrollConstroller.dispose();
     inputTableVerticalScrollConstroller.dispose();
     simulationTimer?.cancel();
+    treeRebuildController?.dispose();
     super.dispose();
   }
 
@@ -250,7 +284,8 @@ class _EditorPageState extends State<EditorPage> {
           if (child.size != Size.zero) {
             currentHorizontalOffset +=
                 child.neededWidth / 2 - child.size.width / 2;
-            child.pos = Offset(
+            child.startPos = child.pos;
+            child.endPos = Offset(
               node.pos.dx +
                   node.size.width / 2 +
                   currentHorizontalOffset -
@@ -264,6 +299,10 @@ class _EditorPageState extends State<EditorPage> {
         }
         // }
       }
+      treeRebuildController?.reset();
+      treeRebuildController?.duration =
+          Duration(milliseconds: (sliderValue * 1000).toInt());
+      treeRebuildController?.forward();
     }
   }
 
@@ -311,7 +350,7 @@ class _EditorPageState extends State<EditorPage> {
 
       for (String? c in uniqueClasses) {
         // utworzenie nowego węzła i uzupełnienie danych o nim
-        TreeNode newNode = TreeNode();
+        TreeNode newNode = TreeNode(startingPos: currentNode.pos);
         newNode.availableSplitArgs =
             List<int>.from(currentNode.availableSplitArgs);
         newNode.availableSplitArgs.remove(bestAttrIndex);
@@ -375,7 +414,9 @@ class _EditorPageState extends State<EditorPage> {
       // należy utworzyć korzeń
       if (root == null) {
         treeNodeQueue.clear(); // wyczyszczenie kolejki dla pewności
-        root = TreeNode();
+        root = TreeNode(
+            startingPos: Offset(MediaQuery.of(context).size.width / 2,
+                MediaQuery.of(context).size.height / 2));
         root!.availableSplitArgs =
             List<int>.generate(dataFrame.getHeaders().length, (index) => index);
         root!.availableSplitArgs.remove((outputAttrIndex < 0
@@ -383,8 +424,6 @@ class _EditorPageState extends State<EditorPage> {
             : outputAttrIndex));
         root!.samplesIds =
             List<int>.generate(dataFrame.getRows().length, (index) => index);
-        root!.pos = Offset(MediaQuery.of(context).size.width / 2,
-            MediaQuery.of(context).size.height / 2);
         countDecisionValues(root!);
         treeNodeQueue.addLast(root!);
         treeNodes.add(root!);
@@ -474,14 +513,6 @@ class _EditorPageState extends State<EditorPage> {
                 pos: pos,
                 selectedTreeNode: selectedTreeNode),
           ),
-          // Center(
-          //   child: AnimatedContainer(
-          //     width: width,
-          //     height: height,
-          //     color: color,
-          //     duration: Duration(milliseconds: 150),
-          //   ),
-          // ),
           MouseRegion(
             cursor: selectedToolNumber == 2
                 ? SystemMouseCursors.move
@@ -572,67 +603,8 @@ class _EditorPageState extends State<EditorPage> {
                 pointerState = PointerState.Up;
               },
             ),
-
-            // GestureDetector(
-            //   onPanStart: (details) {
-            //     if (selectedTreeNode.value?.getBoundingRect().contains(
-            //             details.localPosition - (pos.value ?? Offset.zero)) ??
-            //         false) {
-            //       isMovingNode = true;
-            //     } else {
-            //       isMovingNode = false;
-            //     }
-            //   },
-            //   onPanUpdate: (details) {
-            //     if (selectedToolNumber == 1) {
-            //       if (selectedTreeNode.value != null && isMovingNode) {
-            //         treeViewKey.currentState?.setState(() {
-            //           selectedTreeNode.value?.pos += details.delta;
-            //         });
-            //       }
-            //     } else if (selectedToolNumber == 2) {
-            //       treeViewKey.currentState?.setState(() {
-            //         if (pos.value != null) {
-            //           pos.value = details.delta + pos.value!;
-            //         }
-            //       });
-            //     }
-            //   },
-            //   onDoubleTap: () {
-            //     if (selectedToolNumber == 2) {
-            //       treeViewKey.currentState?.setState(() {
-            //         pos.value = Offset.zero;
-            //       });
-            //     }
-            //   },
-            //   onTapDown: (details) {
-            //     if (selectedToolNumber == 1) {
-            //       treeViewKey.currentState?.setState(() {
-            //         print('Tap');
-            //         Offset tapPos = details.localPosition;
-            //         // sprawdzenie, czy któryś z węzłów został kliknięty
-            //         TreeNode? clickedNode;
-            //         for (TreeNode node in treeNodes.reversed) {
-            //           if (node
-            //               .getBoundingRect()
-            //               .contains(tapPos - (pos.value ?? Offset.zero))) {
-            //             clickedNode = node;
-            //             print(clickedNode);
-            //             break;
-            //           }
-            //         }
-
-            //         if (clickedNode != null) {
-            //           treeNodes.remove(clickedNode);
-            //           treeNodes.add(clickedNode);
-            //         }
-
-            //         selectedTreeNode.value = clickedNode;
-            //       });
-            //     }
-            //   },
-            // ),
           ),
+          // wprowadzanie danych
           AnimatedPositioned(
             duration: Duration(milliseconds: 250),
             curve: Curves.ease,
@@ -1119,6 +1091,7 @@ class _EditorPageState extends State<EditorPage> {
               ),
             ),
           ),
+          // statystyki drzewa
           AnimatedPositioned(
             duration: Duration(milliseconds: 250),
             curve: Curves.ease,
@@ -1145,11 +1118,44 @@ class _EditorPageState extends State<EditorPage> {
                       'Statystyki drzewa',
                       style: TextStyle(fontSize: 20),
                     ),
-                  )
+                  ),
+                  Divider(),
+                  Scrollbar(
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Informacje ogólne',
+                                style: TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.w700)),
+                            SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(Icons.expand,
+                                    color: Colors.grey[700], size: 20),
+                                SizedBox(width: 4),
+                                Text(
+                                  'wysokość drzewa',
+                                  style: TextStyle(color: Colors.grey[800]),
+                                ),
+                                SizedBox(width: 8),
+                                Expanded(child: Divider()),
+                                SizedBox(width: 8),
+                                Text('TODO')
+                              ],
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
+          // ustawienia
           AnimatedPositioned(
             duration: Duration(milliseconds: 250),
             curve: Curves.ease,
@@ -1167,52 +1173,74 @@ class _EditorPageState extends State<EditorPage> {
                   ),
                 ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-                    child: Text(
-                      'Opcje',
-                      style: TextStyle(fontSize: 20),
-                    ),
-                  ),
-                  Divider(),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 10),
-                    child: ElevatedButton(
-                      child: Text('Ładuj przykładowe dane'),
-                      onPressed: () {
-                        loadSampleData();
-                        ScaffoldMessenger.maybeOf(scaffoldKey.currentContext!)
-                            ?.showSnackBar(
-                          SnackBar(
-                            backgroundColor: Colors.blue,
-                            duration: Duration(seconds: 2),
-                            // padding: EdgeInsets.all(8),
-                            elevation: 4,
-                            content: Row(
-                              children: [
-                                Icon(
-                                  Icons.task_alt,
-                                  color: Colors.white,
-                                ),
-                                SizedBox(width: 16),
-                                Text(
-                                  'Załadowano dane',
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                              ],
+              child: Scrollbar(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                        child: Text(
+                          'Opcje',
+                          style: TextStyle(fontSize: 20),
+                        ),
+                      ),
+                      Divider(),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+                        child: Column(
+                          children: [],
+                        ),
+                      ),
+                      Divider(),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Inne', style: TextStyle(fontSize: 16)),
+                            SizedBox(height: 4),
+                            Divider(color: Colors.grey[200]),
+                            SizedBox(height: 8),
+                            ElevatedButton(
+                              child: Text('Ładuj przykładowe dane'),
+                              onPressed: () {
+                                loadSampleData();
+                                ScaffoldMessenger.maybeOf(
+                                        scaffoldKey.currentContext!)
+                                    ?.showSnackBar(
+                                  SnackBar(
+                                    backgroundColor: Colors.blue,
+                                    duration: Duration(seconds: 2),
+                                    // padding: EdgeInsets.all(8),
+                                    elevation: 4,
+                                    content: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.task_alt,
+                                          color: Colors.white,
+                                        ),
+                                        SizedBox(width: 16),
+                                        Text(
+                                          'Załadowano dane',
+                                          style: TextStyle(fontSize: 16),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
+          // szybkość symulacji
           if (showSpeedSelector) ...{
             Align(
               alignment: Alignment.topCenter,
@@ -1258,6 +1286,7 @@ class _EditorPageState extends State<EditorPage> {
               ),
             ),
           },
+          // pasek narzędziowy
           Align(
             alignment: Alignment.topCenter,
             child: Row(
@@ -1422,22 +1451,6 @@ class _EditorPageState extends State<EditorPage> {
                   ],
                 ),
               ],
-            ),
-          ),
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withAlpha(100),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [Text('offset: ${pos.value}')],
-                ),
-              ),
             ),
           ),
         ],
