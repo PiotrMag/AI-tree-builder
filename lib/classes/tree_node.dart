@@ -138,14 +138,22 @@ class TreeNode {
     recalculateSize();
   }
 
+  // zmienna pomocnicza przechowująca najlepszą wartość współczynnika gini
+  // dla danego węzła (lub jeżeli węzeł jest liściem to jest nieskończona)
+  double bestGiniValue = double.infinity;
+
+  // zmienna pomocnicza przechowująca obecną głębokość na jakiej
+  // znajduje się dany węzeł
+  int depth;
+
   void recalculateSize() {
     print('recalc');
     TextSpan span = TextSpan(
       children: [
-        if (splitArgName.isNotEmpty) ...{
+        if (bestGiniValue != double.infinity) ...{
           TextSpan(
             style: topTextStyle,
-            text: splitArgName,
+            text: 'gini: ${bestGiniValue}',
           ),
           TextSpan(text: '\n'),
         },
@@ -159,11 +167,30 @@ class TreeNode {
     TextPainter tp = TextPainter(text: span, textDirection: TextDirection.ltr);
     tp.layout();
 
+    TextSpan span2 = TextSpan(children: [
+      if (splitArgName.isNotEmpty) ...{
+        TextSpan(
+          style: topTextStyle,
+          text: splitArgName,
+        ),
+      },
+    ]);
+
+    TextPainter tp2 =
+        TextPainter(text: span2, textDirection: TextDirection.ltr);
+    tp2.layout();
+
     Size newSize = Size.zero;
-    double newHeight =
-        padding.top + padding.bottom + tp.height + innerSpacing + barHeight;
-    double newWidth =
-        padding.left + padding.right + max(tp.width, barWidth ?? 0);
+    double newHeight = padding.top +
+        padding.bottom +
+        tp.height +
+        (splitArgName.isNotEmpty ? tp2.height + innerSpacing : 0) +
+        innerSpacing +
+        barHeight;
+    double newWidth = padding.left +
+        padding.right +
+        max(max(tp.width, (splitArgName.isNotEmpty ? tp2.width : 0)),
+            barWidth ?? 0);
     newSize = Size(newWidth, newHeight);
     size = newSize;
   }
@@ -172,7 +199,7 @@ class TreeNode {
     return Rect.fromLTWH(pos.dx, pos.dy, size.width, size.height);
   }
 
-  TreeNode({Offset startingPos = Offset.zero}) {
+  TreeNode({Offset startingPos = Offset.zero, this.depth = 0}) {
     pos = startingPos;
     startPos = startingPos;
     endPos = startingPos;

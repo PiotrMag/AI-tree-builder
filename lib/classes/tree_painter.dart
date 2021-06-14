@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:tree_builder/classes/dataframe.dart';
@@ -52,36 +54,50 @@ class TreePainter extends CustomPainter {
     // rysowanie poszczególnych węzłów
     for (TreeNode node in tree) {
       // wstępne przygotowanie tekstu w węźle
+
       TextSpan span = TextSpan(
         children: [
-          if (node.splitArgId > -1) ...{
+          if (node.bestGiniValue != double.infinity) ...{
             TextSpan(
-              style: nodeTextStyle,
-              text: node.splitArgName,
+              style: node.topTextStyle,
+              text: 'gini: ${node.bestGiniValue}',
             ),
             TextSpan(text: '\n'),
           },
           TextSpan(
-            style: nodeTextStyle,
+            style: node.topTextStyle,
             text:
                 '${node.samplesIds.length} ${objectPluralPL(node.samplesIds.length)}',
           ),
         ],
       );
-      TextPainter np = TextPainter(
-        text: span,
-        textDirection: TextDirection.ltr,
-      );
-      np.layout();
+
+      TextPainter tp =
+          TextPainter(text: span, textDirection: TextDirection.ltr);
+      tp.layout();
+
+      TextSpan span2 = TextSpan(children: [
+        if (node.splitArgName.isNotEmpty) ...{
+          TextSpan(
+            style: node.topTextStyle,
+            text: node.splitArgName,
+          ),
+        },
+      ]);
+
+      TextPainter tp2 =
+          TextPainter(text: span2, textDirection: TextDirection.ltr);
+      tp2.layout();
 
       double barWidth = 0;
       if (node.barWidth != null) {
         barWidth = node.barWidth!;
       } else {
-        barWidth = np.width;
+        barWidth = max(tp.width, tp2.width);
       }
 
       // po to, żeby węzeł zaaktulaizował swój rozmiar
+      node.recalculateSize();
       node.getBoundingRect();
 
       // przeliczenie rozmiaru węzła
@@ -99,8 +115,8 @@ class TreePainter extends CustomPainter {
       // }
       // node.size = nodeSize;
 
+      // rysowanie linii
       if (node.parent != null) {
-        // rysowanie linii
         Offset lineFirstEnd =
             Offset(node.pos.dx + node.size.width / 2, node.pos.dy) + pos;
         Offset lineSecondEnd = Offset(
@@ -143,7 +159,11 @@ class TreePainter extends CustomPainter {
                       node.padding.left +
                       counter / totalCount * barWidth +
                       pos.dx,
-                  node.pos.dy + node.padding.top + np.height + 5 + pos.dy,
+                  node.pos.dy +
+                      node.padding.top +
+                      tp.height +
+                      node.innerSpacing +
+                      pos.dy,
                   entry.value / totalCount * barWidth,
                   node.barHeight),
               barPaint);
@@ -153,13 +173,24 @@ class TreePainter extends CustomPainter {
 
       // ewentualne wypisanie nazwy atrybutu, względem którego nastąpił podział
       // if (node.splitArgId >= 0) {
-      np.paint(
+      tp.paint(
           canvas,
           Offset(node.pos.dx + node.size.width / 2,
                   node.pos.dy + node.padding.top) +
-              pos -
-              Offset(np.width / 2, 0));
+              pos +
+              Offset(-tp.width / 2, 0));
       // }
+      tp2.paint(
+          canvas,
+          Offset(node.pos.dx + node.size.width / 2,
+                  node.pos.dy + node.padding.top) +
+              pos +
+              Offset(
+                  -tp2.width / 2,
+                  tp.height +
+                      node.innerSpacing +
+                      node.barHeight +
+                      node.innerSpacing));
 
       // ewentualne rysowanie krawędzi węzła (jeżeli węzł jest obecnie zaznaczony)
       if (node.id == selectedNodeId) {

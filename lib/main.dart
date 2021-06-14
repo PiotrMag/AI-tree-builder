@@ -44,6 +44,7 @@ class _EditorPageState extends State<EditorPage>
     with SingleTickerProviderStateMixin {
   GlobalKey<ScaffoldState> scaffoldKey = GlobalKey();
   GlobalKey<_TreeViewState> treeViewKey = GlobalKey();
+  GlobalKey<_StatsWidgetState> statsKey = GlobalKey();
 
   DataFrame dataFrame = DataFrame();
   List<bool> inputTableCheckedItems = [];
@@ -89,6 +90,11 @@ class _EditorPageState extends State<EditorPage>
   bool resetWaiting = false;
 
   int outputAttrIndex = -1;
+
+  // zmienna potrzebnen do poprawnego wyświetlania statystyk drzewa
+  SimpleValue<int> nodesCount = SimpleValue(value: 0);
+  SimpleValue<int> leafsCount = SimpleValue(value: 0);
+  SimpleValue<int> treeHeight = SimpleValue(value: 0);
 
   // zmienne do obsługi kliknięć i przeciągania myszką
   PointerState pointerState = PointerState.Up;
@@ -306,6 +312,23 @@ class _EditorPageState extends State<EditorPage>
     }
   }
 
+  void updateStats() {
+    statsKey.currentState?.setState(() {
+      nodesCount.value = treeNodes.length;
+      leafsCount.value =
+          treeNodes.where((element) => element.children.isEmpty).length;
+      treeHeight.value = () {
+        int result = 0;
+        for (TreeNode node in treeNodes) {
+          if (node.depth > result) {
+            result = node.depth;
+          }
+        }
+        return result;
+      }.call();
+    });
+  }
+
   void makeStep() {
     TreeNode currentNode = treeNodeQueue.removeFirst();
 
@@ -339,6 +362,8 @@ class _EditorPageState extends State<EditorPage>
     currentNode.splitArgId = bestAttrIndex;
     currentNode.splitArgName =
         bestAttrIndex > -1 ? dataFrame.getHeaders()[bestAttrIndex] : '';
+    currentNode.bestGiniValue = bestSplitValue;
+
     if (bestAttrIndex >= 0) {
       List<String?> attrValues =
           samples.map((e) => e.value[bestAttrIndex]).toList();
@@ -350,7 +375,8 @@ class _EditorPageState extends State<EditorPage>
 
       for (String? c in uniqueClasses) {
         // utworzenie nowego węzła i uzupełnienie danych o nim
-        TreeNode newNode = TreeNode(startingPos: currentNode.pos);
+        TreeNode newNode = TreeNode(
+            startingPos: currentNode.pos, depth: currentNode.depth + 1);
         newNode.availableSplitArgs =
             List<int>.from(currentNode.availableSplitArgs);
         newNode.availableSplitArgs.remove(bestAttrIndex);
@@ -403,6 +429,7 @@ class _EditorPageState extends State<EditorPage>
     treeViewKey.currentState?.setState(() {
       adjustNodesPosition();
     });
+    updateStats();
   }
 
   void onSimulationButtonTap(bool newValue) {
@@ -413,6 +440,9 @@ class _EditorPageState extends State<EditorPage>
       // jeżeli nie ma jeszcze skonstruowanego drzewa, to
       // należy utworzyć korzeń
       if (root == null) {
+        nodesCount.value = 0;
+        leafsCount.value = 0;
+        treeHeight.value = 0;
         treeNodeQueue.clear(); // wyczyszczenie kolejki dla pewności
         root = TreeNode(
             startingPos: Offset(MediaQuery.of(context).size.width / 2,
@@ -431,6 +461,7 @@ class _EditorPageState extends State<EditorPage>
             Timer(Duration(milliseconds: (1000 * sliderValue).toInt()), () {
           handleTimer();
         });
+        updateStats();
       } else {
         handleTimer();
       }
@@ -469,10 +500,18 @@ class _EditorPageState extends State<EditorPage>
   }
 
   void loadSampleData() {
+    for (TextEditingController controller in addRowFormControllers) {
+      controller.dispose();
+    }
+    addRowFormControllers.clear();
+
     dataFrame.clear();
     dataFrame.addColumn('a');
+    addRowFormControllers.add(TextEditingController());
     dataFrame.addColumn('b');
+    addRowFormControllers.add(TextEditingController());
     dataFrame.addColumn('out');
+    addRowFormControllers.add(TextEditingController());
 
     dataFrame.addRow(['1', '2', '1']);
     dataFrame.addRow(['2', '1', '2']);
@@ -1124,29 +1163,11 @@ class _EditorPageState extends State<EditorPage>
                     child: SingleChildScrollView(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Informacje ogólne',
-                                style: TextStyle(
-                                    fontSize: 16, fontWeight: FontWeight.w700)),
-                            SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Icon(Icons.expand,
-                                    color: Colors.grey[700], size: 20),
-                                SizedBox(width: 4),
-                                Text(
-                                  'wysokość drzewa',
-                                  style: TextStyle(color: Colors.grey[800]),
-                                ),
-                                SizedBox(width: 8),
-                                Expanded(child: Divider()),
-                                SizedBox(width: 8),
-                                Text('TODO')
-                              ],
-                            )
-                          ],
+                        child: StatsWidget(
+                          key: statsKey,
+                          nodesCount: nodesCount,
+                          leafsCount: leafsCount,
+                          treeHeight: treeHeight,
                         ),
                       ),
                     ),
@@ -1436,6 +1457,9 @@ class _EditorPageState extends State<EditorPage>
                           root = null;
                           resetWaiting = false;
                           selectedTreeNode.value = null;
+                          nodesCount.value = 0;
+                          leafsCount.value = 0;
+                          treeHeight.value = 0;
                         });
                       },
                     ),
@@ -1455,6 +1479,80 @@ class _EditorPageState extends State<EditorPage>
           ),
         ],
       ),
+    );
+  }
+}
+
+class StatsWidget extends StatefulWidget {
+  const StatsWidget({
+    Key? key,
+    required this.nodesCount,
+    required this.leafsCount,
+    required this.treeHeight,
+  }) : super(key: key);
+
+  final SimpleValue<int> nodesCount;
+  final SimpleValue<int> leafsCount;
+  final SimpleValue<int> treeHeight;
+
+  @override
+  _StatsWidgetState createState() => _StatsWidgetState();
+}
+
+class _StatsWidgetState extends State<StatsWidget> {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Informacje ogólne',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(Icons.tag, color: Colors.grey[700], size: 20),
+            SizedBox(width: 4),
+            Text(
+              'ilość węzłów',
+              style: TextStyle(color: Colors.grey[800]),
+            ),
+            SizedBox(width: 8),
+            Expanded(child: Divider()),
+            SizedBox(width: 8),
+            Text(widget.nodesCount.value.toString())
+          ],
+        ),
+        SizedBox(height: 4),
+        Row(
+          children: [
+            Icon(Icons.park_outlined, color: Colors.grey[700], size: 20),
+            SizedBox(width: 4),
+            Text(
+              'ilość liści',
+              style: TextStyle(color: Colors.grey[800]),
+            ),
+            SizedBox(width: 8),
+            Expanded(child: Divider()),
+            SizedBox(width: 8),
+            Text(widget.leafsCount.value.toString())
+          ],
+        ),
+        SizedBox(height: 4),
+        Row(
+          children: [
+            Icon(Icons.expand, color: Colors.grey[700], size: 20),
+            SizedBox(width: 4),
+            Text(
+              'wysokość drzewa',
+              style: TextStyle(color: Colors.grey[800]),
+            ),
+            SizedBox(width: 8),
+            Expanded(child: Divider()),
+            SizedBox(width: 8),
+            Text(widget.treeHeight.value.toString())
+          ],
+        ),
+      ],
     );
   }
 }
