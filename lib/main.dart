@@ -1208,13 +1208,6 @@ class _EditorPageState extends State<EditorPage>
                       ),
                       Divider(),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-                        child: Column(
-                          children: [],
-                        ),
-                      ),
-                      Divider(),
-                      Padding(
                         padding: const EdgeInsets.fromLTRB(24, 12, 24, 10),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
